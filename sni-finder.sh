@@ -18,9 +18,12 @@ Options:
   -n NUM      Number of domains to test (default: 10)
   -t SEC      Timeout per test in seconds (default: 5)
   -o FILE     Write JSON output to file (default: stdout)
+  -y          Auto-apply best SNI to Xray config (no menu)
   -v          Verbose progress on stderr
   -V          Show version
   -h          Show this help
+  --xray-config PATH  Specify Xray config file path
+  --no-menu   Skip interactive menu, just output
 EOF
   exit 0
 }
@@ -55,13 +58,29 @@ COUNT="$DEFAULT_COUNT"
 TIMEOUT="$DEFAULT_TIMEOUT"
 OUTPUT_FILE=""
 VERBOSE=false
+AUTO_APPLY=false
+NO_MENU=false
+XRAY_CONFIG=""
 
-while getopts "l:n:t:o:vVh" opt; do
+# Parse long options first
+LONGOPTS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --xray-config) XRAY_CONFIG="$2"; shift 2 ;;
+    --no-menu) NO_MENU=true; shift ;;
+    --) shift; break ;;
+    *) LONGOPTS+=("$1"); shift ;;
+  esac
+done
+set -- "${LONGOPTS[@]}"
+
+while getopts "l:n:t:o:yvVh" opt; do
   case $opt in
     l) POOL_FILE="$OPTARG" ;;
     n) COUNT="$OPTARG" ;;
     t) TIMEOUT="$OPTARG" ;;
     o) OUTPUT_FILE="$OPTARG" ;;
+    y) AUTO_APPLY=true ;;
     v) VERBOSE=true ;;
     V) echo "sni-finder.sh v$SNI_FINDER_VERSION"; exit 0 ;;
     h) usage ;;
@@ -355,8 +374,104 @@ output_json() {
   echo -e "$json"
 }
 
+# --- Find Xray config file ---
+find_xray_config() {
+  local paths=(
+    "/usr/local/etc/xray/config.json"
+    "/etc/xray/config.json"
+    "/opt/xray/config.json"
+    "/usr/local/etc/v2ray/config.json"
+    "/etc/v2ray/config.json"
+  )
+  for p in "${paths[@]}"; do
+    [[ -f "$p" ]] && { echo "$p"; return 0; }
+  done
+  return 1
+}
+
+# --- Apply best SNI to Xray config ---
+apply_sni() {
+  local sni="$1"
+  local config_path="$2"
+
+  if [[ -z "$config_path" ]]; then
+    config_path=$(find_xray_config)
+  fi
+
+  if [[ -z "$config_path" || ! -f "$config_path" ]]; then
+    echo "Error: Xray/V2ray config not found." >&2
+    echo "Specify path with --xray-config PATH" >&2
+    return 1
+  fi
+
+  local backup="${config_path}.bak.$(date +%s)"
+  cp "$config_path" "$backup"
+  echo "Backup saved: $backup" >&2
+
+  if command -v jq &>/dev/null; then
+    jq --arg sni "$sni" '
+      (.inbounds[]?.streamSettings?.realitySettings?.serverNames) //= [] |
+      (.inbounds[]?.streamSettings?.realitySettings?.serverNames) |= [$sni] |
+      (.inbounds[]?.streamSettings?.realitySettings?.serverName) //= $sni |
+      (.inbounds[]?.streamSettings?.realitySettings?.serverName) |= $sni
+    ' "$config_path" > "${config_path}.tmp" && mv "${config_path}.tmp" "$config_path"
+    echo "Config updated with jq." >&2
+  else
+    sed -i "s/\"serverNames\": \[[^]]*\]/\"serverNames\": [\"$sni\"]/" "$config_path"
+    sed -i "s/\"serverName\": \"[^\"]*\"/\"serverName\": \"$sni\"/" "$config_path"
+    echo "Config updated with sed." >&2
+  fi
+
+  local svc=""
+  systemctl is-active --quiet xray 2>/dev/null && svc="xray"
+  systemctl is-active --quiet v2ray 2>/dev/null && svc="v2ray"
+  if [[ -n "$svc" ]]; then
+    systemctl restart "$svc"
+    echo "$svc restarted." >&2
+  fi
+
+  echo ">>> SNI updated to: $sni <<<" >&2
+  return 0
+}
+
+# --- Interactive menu ---
+show_menu() {
+  local best_sni="$1"
+  local best_score="$2"
+  local best_reachable="$3"
+  local config_path="$4"
+
+  while true; do
+    echo >&2
+    echo "==============================" >&2
+    echo " 0) Exit" >&2
+    echo " 1) Re-test with new random domains" >&2
+    if [[ "$best_reachable" == "true" ]]; then
+      echo " 2) Apply '$best_sni' to Xray config and restart" >&2
+    else
+      echo " 2) (unavailable - no reachable domain)" >&2
+    fi
+    echo "==============================" >&2
+    read -r -p "Choose [0-2]: " choice
+
+    case "$choice" in
+      0) exit 0 ;;
+      1) return 1 ;;
+      2)
+        if [[ "$best_reachable" != "true" ]]; then
+          echo "No reachable domain. Cannot apply." >&2
+          continue
+        fi
+        apply_sni "$best_sni" "$config_path"
+        exit $?
+        ;;
+      *) echo "Invalid choice." >&2 ;;
+    esac
+  done
+}
+
 # --- Main ---
-main() {
+run_test() {
   load_pool "$POOL_FILE"
 
   local pool_size=${#pool[@]}
@@ -389,7 +504,7 @@ main() {
   # Output
   if [[ -n "$OUTPUT_FILE" ]]; then
     output_json scored "$best_sni" "$pool_size" "$sample_size" > "$OUTPUT_FILE"
-    echo "Results written to: $OUTPUT_FILE"
+    echo "Results written to: $OUTPUT_FILE" >&2
   else
     output_json scored "$best_sni" "$pool_size" "$sample_size"
   fi
@@ -402,6 +517,31 @@ main() {
     echo "---" >&2
     echo ">>> No reachable domain found. Best effort: $best_sni (score: $best_score) <<<" >&2
   fi
+}
+
+main() {
+  if $AUTO_APPLY; then
+    run_test
+    if [[ "$best_reachable" == "true" ]]; then
+      apply_sni "$best_sni" "$XRAY_CONFIG"
+    else
+      echo "No reachable domain found, nothing to apply." >&2
+      exit 1
+    fi
+    exit 0
+  fi
+
+  while true; do
+    run_test
+
+    if $NO_MENU || [[ ! -t 0 ]]; then
+      break
+    fi
+
+    show_menu "$best_sni" "$best_score" "$best_reachable" "$XRAY_CONFIG"
+    ret=$?
+    [[ $ret -eq 1 ]] && continue || break
+  done
 }
 
 main
