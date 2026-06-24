@@ -384,7 +384,7 @@ main() {
   IFS=' ' read -ra scored <<< "$(score_domains raw_results)"
 
   # Get best SNI
-  IFS='|' read -r best_score best_sni _ <<< "${scored[0]}"
+  IFS='|' read -r best_score best_sni best_reachable _ <<< "${scored[0]}"
 
   # Output
   if [[ -n "$OUTPUT_FILE" ]]; then
@@ -392,6 +392,15 @@ main() {
     echo "Results written to: $OUTPUT_FILE"
   else
     output_json scored "$best_sni" "$pool_size" "$sample_size"
+  fi
+
+  # Summary
+  if [[ "$best_reachable" == "true" ]]; then
+    echo "---" >&2
+    echo ">>> Best SNI: $best_sni (score: $best_score) <<<" >&2
+  else
+    echo "---" >&2
+    echo ">>> No reachable domain found. Best effort: $best_sni (score: $best_score) <<<" >&2
   fi
 }
 
