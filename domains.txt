@@ -1,7 +1,3 @@
-# ============================================================
-# SNI Finder - Domain Pool
-# ============================================================
-# 一、国际知名开源、技术与开发者工具
 docker.com
 hub.docker.com
 github.io
@@ -27,8 +23,6 @@ gitlab.com
 kernel.org
 llvm.org
 godotengine.org
-
-# 二、海外知名高校与科研机构
 harvard.edu
 stanford.edu
 mit.edu
@@ -54,8 +48,6 @@ nature.com
 sciencedirect.com
 springer.com
 wiley.com
-
-# 三、知名开源媒体、设计、文档与工具链
 wordpress.org
 wikimedia.org
 pixabay.com
@@ -76,8 +68,6 @@ dribbble.com
 vimeo.com
 bandcamp.com
 soundcloud.com
-
-# 四、海外二线云服务、小众 IT 服务及国外基础服务
 digitalocean.com
 linode.com
 vultr.com
@@ -98,8 +88,6 @@ slack.com
 trello.com
 zoom.us
 webex.com
-
-# 五、国际知名非营利组织与开放标准
 eff.org
 fsf.org
 gnu.org
@@ -110,8 +98,6 @@ openstreetmap.org
 creativecommons.org
 ted.com
 gutenberg.org
-
-# 六、日本主流电商、百货与本地生活服务
 rakuten.co.jp
 jp.mercari.com
 zozo.jp
@@ -125,8 +111,6 @@ www.muji.com
 www.uniqlo.com
 askul.co.jp
 bookoffonline.co.jp
-
-# 七、日本本土知名社区、IT 技术与媒体门户
 nicovideo.jp
 www.pixiv.net
 hatenablog.jp
@@ -139,8 +123,6 @@ booth.pm
 itmedia.co.jp
 impress.co.jp
 news.livedoor.com
-
-# 八、日本著名高等学府（kyoto-u.ac.jp 已在第二节，跳过）
 u-tokyo.ac.jp
 titech.ac.jp
 osaka-u.ac.jp
@@ -150,8 +132,6 @@ kyushu-u.ac.jp
 waseda.jp
 keio.ac.jp
 tsukuba.ac.jp
-
-# 九、日本政府部门、公共气象与公共组织
 jma.go.jp
 e-gov.go.jp
 mext.go.jp
@@ -162,14 +142,11 @@ post.japanpost.jp
 jnto.go.jp
 jica.go.jp
 jra.go.jp
-
-# 十、日本本土支柱企业、公共交通与金融
 jreast.co.jp
 westjr.co.jp
 ana.co.jp
 smbc.co.jp
 www.bk.mufg.jp
-
 lihkg.com
 discuss.com.hk
 hk01.com
