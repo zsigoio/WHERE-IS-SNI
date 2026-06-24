@@ -48,12 +48,35 @@ bash sni-finder.sh -l my-domains.txt
 # 7. 输出到文件
 bash sni-finder.sh -o result.json
 
-# 8. 显示详细进度
+# 8. 跳过菜单直接应用最优 SNI
+bash sni-finder.sh -y
+
+# 9. 只输出 JSON，跳过菜单
+bash sni-finder.sh --no-menu
+
+# 10. 指定 Xray 配置文件路径
+bash sni-finder.sh -y --xray-config /etc/xray/config.json
+
+# 11. 显示详细进度
 bash sni-finder.sh -v
 
-# 9. 组合使用
+# 12. 组合使用
 bash sni-finder.sh -n 8 -t 4 -o result.json -v
 ```
+
+### 交互菜单
+
+运行后出现三个选项：
+
+```
+ 0) Exit
+ 1) Re-test with new random domains
+ 2) Apply 'best-sni' to Xray config and restart
+```
+
+- **0** — 退出
+- **1** — 重新随机抽选域名测试
+- **2** — 将最优 SNI 写入 Xray 配置（自动备份原文件）并重启服务
 
 ### 检测指标与评分权重
 
@@ -166,12 +189,35 @@ bash sni-finder.sh -l my-domains.txt
 # 7. Output to file
 bash sni-finder.sh -o result.json
 
-# 8. Verbose progress
+# 8. Auto-apply best SNI, skip menu
+bash sni-finder.sh -y
+
+# 9. JSON only, no menu
+bash sni-finder.sh --no-menu
+
+# 10. Specify Xray config path
+bash sni-finder.sh -y --xray-config /etc/xray/config.json
+
+# 11. Verbose progress
 bash sni-finder.sh -v
 
-# 9. Combine options
+# 12. Combine options
 bash sni-finder.sh -n 8 -t 4 -o result.json -v
 ```
+
+### Interactive Menu
+
+After testing, three options appear:
+
+```
+ 0) Exit
+ 1) Re-test with new random domains
+ 2) Apply 'best-sni' to Xray config and restart
+```
+
+- **0** — Exit
+- **1** — Pick new random domains and re-test
+- **2** — Write best SNI to Xray config (auto-backup) and restart service
 
 ### Scoring Breakdown
 
@@ -256,12 +302,35 @@ bash sni-finder.sh -l my-domains.txt
 # ۷. ذخیره خروجی در فایل
 bash sni-finder.sh -o result.json
 
-# ۸. نمایش جزئیات پیشرفت
+# ۸. اعمال خودکار SNI برتر، رد کردن منو
+bash sni-finder.sh -y
+
+# ۹. فقط خروجی JSON، بدون منو
+bash sni-finder.sh --no-menu
+
+# ۱۰. تعیین مسیر کانفیگ Xray
+bash sni-finder.sh -y --xray-config /etc/xray/config.json
+
+# ۱۱. نمایش جزئیات پیشرفت
 bash sni-finder.sh -v
 
-# ۹. ترکیب گزینه‌ها
+# ۱۲. ترکیب گزینه‌ها
 bash sni-finder.sh -n 8 -t 4 -o result.json -v
 ```
+
+### منوی تعاملی
+
+پس از تست، سه گزینه نمایش داده می‌شود:
+
+```
+ 0) خروج
+ 1) تست مجدد با دامنه‌های تصادفی جدید
+ 2) اعمال SNI برتر در کانفیگ Xray و راه‌اندازی مجدد
+```
+
+- **۰** — خروج
+- **۱** — انتخاب تصادفی دامنه‌های جدید و تست مجدد
+- **۲** — نوشتن بهترین SNI در کانفیگ Xray (پشتیبان‌گیری خودکار) و راه‌اندازی مجدد سرویس
 
 ### معیارهای امتیازدهی
 
