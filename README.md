@@ -19,6 +19,12 @@
 
 ### 使用方法
 
+**一键运行：**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+或先下载到本地：
 ```bash
 # 1. 在 Linux 服务器上下载
 git clone https://github.com/zsigoio/WHERE-IS-SNI.git
@@ -131,6 +137,12 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 
 ### Usage
 
+**One-liner:**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+Or clone locally:
 ```bash
 # 1. Clone on your Linux server
 git clone https://github.com/zsigoio/WHERE-IS-SNI.git
@@ -215,6 +227,12 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 
 ### نحوه استفاده
 
+**اجرای یک‌خطی:**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+یا کلون کردن:
 ```bash
 # ۱. کلون کردن روی سرور لینوکسی
 git clone https://github.com/zsigoio/WHERE-IS-SNI.git
