@@ -134,18 +134,15 @@ pick_random() {
 # --- Test a single domain ---
 test_domain() {
   local domain="$1"
-  local result
 
-  log "Testing: $domain"
-
-  # --- DNS resolution time ---
-  local dns_ms=-1 dns_ok=false
+  # --- DNS resolution ---
+  local dns_ms=-1 dns_ok=false host_ip=""
   local dns_start dns_end
   dns_start=$(date +%s%N 2>/dev/null)
-  host_ip=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | head -1)
+  host_ip=$(getent hosts "$domain" 2>/dev/null | awk '{print $1; exit}')
   dns_end=$(date +%s%N 2>/dev/null)
   if [[ -z "$host_ip" ]]; then
-    host_ip=$(ping -c 1 -W 1 "$domain" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    host_ip=$(ping -c 1 -W 1 "$domain" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     dns_end=$(date +%s%N 2>/dev/null)
   fi
   if [[ -n "$host_ip" ]]; then
@@ -153,70 +150,66 @@ test_domain() {
     dns_ms=$(( (dns_end - dns_start) / 1000000 ))
   fi
 
-  # --- TCP + TLS test ---
-  local reachable=false
-  local tls_version=""
-  local tls_ms=-1
-  local cert_size=0
-  local cert_chain_len=0
-  local key_type=""
-  local issuer=""
+  # --- TCP + TLS ---
+  local reachable=false tls_version="" tls_ms=-1
+  local cert_size=0 cert_chain_len=0 key_type="" issuer=""
 
   if $dns_ok; then
-    local tls_start tls_end
+    local tls_start tls_end raw
     tls_start=$(date +%s%N)
     raw=$(timeout "$TIMEOUT" openssl s_client -connect "$domain:443" -servername "$domain" -showcerts 2>/dev/null < /dev/null)
     tls_end=$(date +%s%N)
 
-    if [[ -n "$raw" ]] && echo "$raw" | grep -qi "BEGIN CERTIFICATE"; then
+    if [[ "$raw" == *"BEGIN CERTIFICATE"* ]]; then
       reachable=true
       tls_ms=$(( (tls_end - tls_start) / 1000000 ))
 
       # TLS version
-      tls_version=$(echo "$raw" | grep -i "^New, TLS" | head -1 | sed 's/New, //' | sed 's/, Cipher.*//')
+      tls_version=$(sed -n '/^New, TLS/{s/New, //; s/, Cipher.*//p; q}' <<< "$raw")
 
-      # Cert chain size & length
+      # Certificate chain
       local certs
-      certs=$(echo "$raw" | awk '/-----BEGIN CERTIFICATE-----/{flag=1} flag; /-----END CERTIFICATE-----/{if(flag) flag=0; print ""}' 2>/dev/null)
+      certs=$(awk '/-----BEGIN CERTIFICATE-----/{flag=1} flag; /-----END CERTIFICATE-----/{flag=0; print ""}' <<< "$raw" 2>/dev/null)
       if [[ -n "$certs" ]]; then
-        cert_size=$(echo "$certs" | wc -c)
-        cert_chain_len=$(echo "$certs" | grep -c "BEGIN CERTIFICATE")
+        cert_size=$(wc -c <<< "$certs")
+        cert_chain_len=$(grep -c "BEGIN CERTIFICATE" <<< "$certs")
       fi
 
       # Key type from leaf cert
       local leaf_cert
-      leaf_cert=$(echo "$raw" | awk '/-----BEGIN CERTIFICATE-----/{if(!found) flag=1; found=1} flag; /-----END CERTIFICATE-----/{if(flag) flag=0; print ""}' 2>/dev/null)
+      leaf_cert=$(awk '/-----BEGIN CERTIFICATE-----/{if(!found) flag=1; found=1} flag; /-----END CERTIFICATE-----/{flag=0; print ""}' <<< "$raw" 2>/dev/null)
       if [[ -n "$leaf_cert" ]]; then
         local key_text
-        key_text=$(echo "$leaf_cert" | openssl x509 -noout -text 2>/dev/null)
+        key_text=$(openssl x509 -noout -text <<< "$leaf_cert" 2>/dev/null)
         if [[ -n "$key_text" ]]; then
-          key_type=$(echo "$key_text" | grep -i "Public Key Algorithm" | head -1 | sed 's/.*: //' | sed 's/^ *//' | tr -d '\n\r')
-          issuer=$(echo "$key_text" | grep -i "Issuer:" | head -1 | sed 's/.*Issuer: //' | sed 's/^ *//' | cut -d',' -f1 | tr -d '\n\r')
+          key_type=$(grep -i "Public Key Algorithm" <<< "$key_text" | head -1 | sed 's/.*: *//' | tr -d '\n\r')
+          issuer=$(grep -i "^[[:space:]]*Issuer:" <<< "$key_text" | head -1 | sed 's/.*Issuer: *//' | cut -d',' -f1 | tr -d '\n\r')
         fi
       fi
     fi
   fi
 
-  # --- Ping latency ---
+  # --- Ping ---
   local ping_ms=-1
   if command -v ping &>/dev/null && [[ -n "$host_ip" ]]; then
+    local ping_output
     ping_output=$(timeout 3 ping -c 1 -W 2 "$domain" 2>/dev/null)
     if [[ -n "$ping_output" ]]; then
-      ping_ms=$(echo "$ping_output" | tail -1 | awk -F'/' '{print $5}' | tr -d ' ' | sed 's/\..*//')
+      ping_ms=$(tail -1 <<< "$ping_output" | awk -F'/' '{print $5}' | sed 's/^ *//; s/\..*//; s/ //g')
       if [[ -z "$ping_ms" || "$ping_ms" == "0" ]]; then
-        ping_ms=$(echo "$ping_output" | grep -oE 'time=[0-9.]+ ms' | grep -oE '[0-9.]+' | head -1 | sed 's/\..*//')
+        ping_ms=$(grep -oE 'time=[0-9.]+' <<< "$ping_output" | head -1 | grep -oE '[0-9.]+' | sed 's/\..*//')
       fi
     fi
     [[ -z "$ping_ms" ]] && ping_ms=-1
   fi
 
-  # --- Normalize key type for scoring ---
-  local key_class=""
+  # --- Normalize key type ---
+  local key_class
   if [[ -z "$key_type" ]]; then
     key_class="unknown"
-  elif echo "$key_type" | grep -qi "ecdsa\|id-ecPublicKey\|prime256v1\|secp384r1\|ec\b"; then
+  elif [[ "${key_type,,}" =~ ecdsa|id-ecpublickey|prime256v1|secp384r1|^ec$ ]]; then
     key_class="ECDSA"
-  elif echo "$key_type" | grep -qi "rsaEncryption\|rsa\b"; then
+  elif [[ "${key_type,,}" =~ rsa ]]; then
     key_class="RSA"
   else
     key_class="other"
@@ -294,9 +287,9 @@ score_domains() {
     fi
 
     # 3. TLS version (15%)
-    if echo "$tls_version" | grep -qi "TLSv1\.3\|TLS 1\.3"; then
+    if [[ "${tls_version,,}" == *"tlsv1.3"* || "${tls_version,,}" == *"tls 1.3"* ]]; then
       score=$(( score + 15 ))
-    elif echo "$tls_version" | grep -qi "TLSv1\.2\|TLS 1\.2"; then
+    elif [[ "${tls_version,,}" == *"tlsv1.2"* || "${tls_version,,}" == *"tls 1.2"* ]]; then
       score=$(( score + 3 ))
     fi
 
@@ -339,8 +332,8 @@ json_escape() {
   s="${s//$'\n'/\\n}"
   s="${s//$'\t'/\\t}"
   s="${s//$'\r'/}"
-  s="$(echo -n "$s" | tr -dc '[:print:]' | tr '|' '-')"
-  echo "$s"
+  s="${s//|/-}"
+  printf '%s' "$s" | tr -dc '[:print:]'
 }
 
 # --- Output JSON ---
@@ -500,19 +493,36 @@ run_test() {
   local sample_size=$COUNT
   [[ $sample_size -gt $pool_size ]] && sample_size=$pool_size
 
-  log "Pool: $pool_size domains, testing: $sample_size"
-
   # Randomly select domains
   read -ra selected <<< "$(pick_random "$sample_size" "${pool[@]}")"
+  local total=${#selected[@]}
+
+  log "Pool: $pool_size domains, testing: $total"
   log "Selected: ${selected[*]}"
 
-  # Test each domain
+  # Test each domain with progress
   local raw_results=()
-  for domain in "${selected[@]}"; do
+  for i in "${!selected[@]}"; do
+    local domain="${selected[i]}" idx=$((i + 1))
+
+    # Show progress line (always to stderr, not just in verbose)
+    printf '\r[%2d/%d] %s ...' "$idx" "$total" "$domain" >&2
+
     raw_results+=("$(test_domain "$domain")")
+
+    # Quick parse for result indicator
+    local row="${raw_results[-1]}"
+    if [[ "$row" == *"|true|"* ]]; then
+      local ver ms
+      IFS='|' read -r _ _ ver ms _ <<< "$row"
+      printf '\r[%2d/%d] %-35s ✓ %s %sms\n' "$idx" "$total" "$domain" "$ver" "$ms" >&2
+    else
+      printf '\r[%2d/%d] %-35s ✗ unreachable\n' "$idx" "$total" "$domain" >&2
+    fi
   done
 
   # Score and sort
+  echo "Scoring..." >&2
   local scored=()
   while IFS= read -r line; do
     scored+=("$line")
