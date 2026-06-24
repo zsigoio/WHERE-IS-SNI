@@ -413,12 +413,14 @@ apply_sni() {
       (.inbounds[]?.streamSettings?.realitySettings?.serverNames) //= [] |
       (.inbounds[]?.streamSettings?.realitySettings?.serverNames) |= [$sni] |
       (.inbounds[]?.streamSettings?.realitySettings?.serverName) //= $sni |
-      (.inbounds[]?.streamSettings?.realitySettings?.serverName) |= $sni
+      (.inbounds[]?.streamSettings?.realitySettings?.serverName) |= $sni |
+      (.inbounds[]?.streamSettings?.realitySettings?.dest) |= $sni + ":" + (split(":")[1] // "443")
     ' "$config_path" > "${config_path}.tmp" && mv "${config_path}.tmp" "$config_path"
     echo "Config updated with jq." >&2
   else
     sed -i "s/\"serverNames\": \[[^]]*\]/\"serverNames\": [\"$sni\"]/" "$config_path"
     sed -i "s/\"serverName\": \"[^\"]*\"/\"serverName\": \"$sni\"/" "$config_path"
+    sed -i "s/\"dest\": \"[^\":]*:/\"dest\": \"$sni:/" "$config_path"
     echo "Config updated with sed." >&2
   fi
 
