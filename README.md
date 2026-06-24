@@ -16,6 +16,8 @@
 |------|------|
 | `domains.txt` | 399 个候选域名，覆盖全球各地理区域和行业 |
 | `sni-finder.sh` | 自动测试脚本：随机抽取、检测、评分、输出 JSON |
+| `sni-finder-run.sh` | 一键安装运行脚本（curl 直用） |
+| `.gitignore` | 忽略本地配置文件 |
 
 ### 使用方法
 
@@ -157,6 +159,8 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 |------|-------------|
 | `domains.txt` | 399 candidate domains covering global regions and industries |
 | `sni-finder.sh` | Auto-test script: random pick, probe, score, JSON output |
+| `sni-finder-run.sh` | One-liner install & run script |
+| `.gitignore` | Ignore local config files |
 
 ### Usage
 
@@ -267,9 +271,11 @@ After testing, three options appear:
 ### فایل‌ها
 
 | فایل | توضیحات |
-|------|---------|
+|-------|---------|
 | `domains.txt` | ۳۹۹ دامنه کاندید از مناطق و صنایع مختلف جهان |
 | `sni-finder.sh` | اسکریپت تست خودکار: انتخاب تصادفی، بررسی، امتیازدهی، خروجی JSON |
+| `sni-finder-run.sh` | اسکریپت نصب و اجرای یک‌خطی |
+| `.gitignore` | نادیده گرفتن فایل‌های کانفیگ محلی |
 
 ### نحوه استفاده
 
