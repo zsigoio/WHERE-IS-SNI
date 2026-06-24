@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SNI_FINDER_VERSION="1.0.0"
-DEFAULT_COUNT=10
+DEFAULT_COUNT=15
 DEFAULT_TIMEOUT=5
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEFAULT_POOL="$SCRIPT_DIR/domains.txt"
