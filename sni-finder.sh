@@ -288,7 +288,7 @@ score_domains() {
     if echo "$tls_version" | grep -qi "TLSv1\.3\|TLS 1\.3"; then
       score=$(( score + 15 ))
     elif echo "$tls_version" | grep -qi "TLSv1\.2\|TLS 1\.2"; then
-      score=$(( score + 7 ))
+      score=$(( score + 3 ))
     fi
 
     # 4. Cert size (15%) - relative
