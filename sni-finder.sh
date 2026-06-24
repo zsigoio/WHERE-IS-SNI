@@ -410,12 +410,9 @@ apply_sni() {
 
   if command -v jq &>/dev/null; then
     jq --arg sni "$sni" '
-      (.inbounds[]?.streamSettings?.realitySettings?.serverNames) //= [] |
       (.inbounds[]?.streamSettings?.realitySettings?.serverNames) |= [$sni] |
-      (.inbounds[]?.streamSettings?.realitySettings?.serverName) //= $sni |
       (.inbounds[]?.streamSettings?.realitySettings?.serverName) |= $sni |
       (.inbounds[]?.streamSettings?.realitySettings?.dest) |= $sni + ":" + (split(":")[1] // "443") |
-      (.inbounds[]?.streamSettings?.xhttpSettings?.host) //= $sni |
       (.inbounds[]?.streamSettings?.xhttpSettings?.host) |= $sni
     ' "$config_path" > "${config_path}.tmp" && mv "${config_path}.tmp" "$config_path"
     echo "Config updated with jq." >&2
