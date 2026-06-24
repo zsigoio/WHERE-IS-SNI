@@ -237,7 +237,13 @@ score_domains() {
   local min_certsize=999999 max_certsize=0
 
   for row in "${data[@]}"; do
+    # Skip entries with no pipe delimiters (corrupted data)
+    [[ "$row" != *"|"* ]] && continue
+
     IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms <<< "$row"
+
+    # Skip entries with empty domain
+    [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
 
     if [[ "$reachable" == "true" ]]; then
       local total_ms=$(( (tls_ms > 0 ? tls_ms : 0) + (ping_ms > 0 ? ping_ms : 0) ))
@@ -267,6 +273,9 @@ score_domains() {
 
   for row in "${data[@]}"; do
     IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms <<< "$row"
+
+    [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
+    [[ "$reachable" != "true" && "$reachable" != "false" ]] && continue
 
     local score=0
 
@@ -318,7 +327,7 @@ score_domains() {
   done
 
   # Sort by score descending
-  sorted=($(printf '%s\n' "${scores[@]}" | sort -t'|' -k1 -rn))
+  mapfile -t sorted < <(printf '%s\n' "${scores[@]}" | sort -t'|' -k1 -rn)
   printf '%s\n' "${sorted[@]}"
 }
 
@@ -354,6 +363,11 @@ output_json() {
   for row in "${results[@]}"; do
     IFS='|' read -r score domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms <<< "$row"
 
+    # Skip corrupted entries in output
+    [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
+    [[ "$reachable" != "true" && "$reachable" != "false" ]] && continue
+    [[ ! "$score" =~ ^[0-9]+$ ]] && continue
+
     $first && first=false || json+=",\n"
     json+="    {\n"
     json+="      \"sni\": \"$(json_escape "$domain")\",\n"
@@ -372,7 +386,7 @@ output_json() {
 
   json+="\n  ]\n}\n"
 
-  echo -e "$json"
+  printf '%b\n' "$json"
 }
 
 # --- Find Xray config file ---
