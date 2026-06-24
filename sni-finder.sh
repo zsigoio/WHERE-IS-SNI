@@ -190,8 +190,8 @@ test_domain() {
         local key_text
         key_text=$(echo "$leaf_cert" | openssl x509 -noout -text 2>/dev/null)
         if [[ -n "$key_text" ]]; then
-          key_type=$(echo "$key_text" | grep -i "Public Key Algorithm" | head -1 | sed 's/.*: //' | sed 's/^ *//')
-          issuer=$(echo "$key_text" | grep -i "Issuer:" | head -1 | sed 's/.*Issuer: //' | sed 's/^ *//' | cut -d',' -f1)
+          key_type=$(echo "$key_text" | grep -i "Public Key Algorithm" | head -1 | sed 's/.*: //' | sed 's/^ *//' | tr -d '\n\r')
+          issuer=$(echo "$key_text" | grep -i "Issuer:" | head -1 | sed 's/.*Issuer: //' | sed 's/^ *//' | cut -d',' -f1 | tr -d '\n\r')
         fi
       fi
     fi
@@ -222,7 +222,7 @@ test_domain() {
     key_class="other"
   fi
 
-  echo "$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms"
+  echo "$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms" | tr -d '\r'
 }
 
 # --- Scoring ---
@@ -318,8 +318,8 @@ score_domains() {
   done
 
   # Sort by score descending
-  IFS=$'\n' sorted=($(sort -t'|' -k1 -rn <<< "${scores[*]}"))
-  echo "${sorted[@]}"
+  sorted=($(printf '%s\n' "${scores[@]}" | sort -t'|' -k1 -rn))
+  printf '%s\n' "${sorted[@]}"
 }
 
 # --- JSON escape ---
@@ -330,6 +330,7 @@ json_escape() {
   s="${s//$'\n'/\\n}"
   s="${s//$'\t'/\\t}"
   s="${s//$'\r'/}"
+  s="$(echo -n "$s" | tr -dc '[:print:]' | tr '|' '-')"
   echo "$s"
 }
 
@@ -498,7 +499,10 @@ run_test() {
   done
 
   # Score and sort
-  IFS=' ' read -ra scored <<< "$(score_domains raw_results)"
+  local scored=()
+  while IFS= read -r line; do
+    scored+=("$line")
+  done < <(score_domains raw_results)
 
   # Get best SNI
   IFS='|' read -r best_score best_sni best_reachable _ <<< "${scored[0]}"
