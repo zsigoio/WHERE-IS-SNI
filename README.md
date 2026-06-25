@@ -8,22 +8,27 @@
 
 ### 简介
 
-`WHERE-IS-SNI` 提供一个包含 **399 个**候选域名的池子和一个 Bash 评分脚本，帮助你为 Xray REALITY 协议找到最优 SNI。
+`WHERE-IS-SNI` 提供一个包含 **773 个**候选域名的池子和一个 Bash 评分脚本，帮助你为 Xray REALITY 协议找到最优 SNI。
 
 ### 文件说明
 
 | 文件 | 说明 |
 |------|------|
-| `domains.txt` | 399 个候选域名，覆盖全球各地理区域和行业 |
+| `domains.txt` | 773 个候选域名，覆盖全球各地理区域和行业 |
 | `sni-finder.sh` | 自动测试脚本：随机抽取、检测、评分、输出 JSON |
 | `sni-finder-run.sh` | 一键安装运行脚本（curl 直用） |
 | `.gitignore` | 忽略本地配置文件 |
 
 ### 使用方法
 
-**一键运行：**
+**一键运行（随机 15 个）：**
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+**测试指定域名：**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh) shopee.vn tiki.vn sendo.vn
 ```
 
 或先下载到本地：
@@ -35,35 +40,41 @@ cd WHERE-IS-SNI
 # 2. 给脚本执行权限
 chmod +x sni-finder.sh
 
-# 3. 直接运行（随机检测 10 个域名）
+# 3. 直接运行（随机检测 15 个域名）
 bash sni-finder.sh
 
-# 4. 指定检测数量
+# 4. 测试指定域名
+bash sni-finder.sh www.samsung.com www.sony.com www.intel.com
+
+# 5. 指定检测数量
 bash sni-finder.sh -n 5
 
-# 5. 指定超时时间（秒）
+# 6. 指定超时时间（秒）
 bash sni-finder.sh -t 3
 
-# 6. 自定义域名列表
+# 7. 自定义域名列表
 bash sni-finder.sh -l my-domains.txt
 
-# 7. 输出到文件
+# 8. 输出到文件
 bash sni-finder.sh -o result.json
 
-# 8. 跳过菜单直接应用最优 SNI
+# 9. 跳过菜单直接应用最优 SNI
 bash sni-finder.sh -y
 
-# 9. 只输出 JSON，跳过菜单
+# 10. 只输出 JSON，跳过菜单
 bash sni-finder.sh --no-menu
 
-# 10. 指定 Xray 配置文件路径
+# 11. 指定 Xray 配置文件路径
 bash sni-finder.sh -y --xray-config /etc/xray/config.json
 
-# 11. 显示详细进度
+# 12. 显示详细进度
 bash sni-finder.sh -v
 
-# 12. 组合使用
+# 13. 组合使用
 bash sni-finder.sh -n 8 -t 4 -o result.json -v
+
+# 14. 指定域名 + 自动应用
+bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 ```
 
 ### 交互菜单
@@ -77,7 +88,7 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 ```
 
 - **0** — 退出
-- **1** — 重新随机抽选域名测试
+- **1** — 重新随机抽选域名测试（若使用指定域名模式则重新测试相同域名）
 - **2** — 将最优 SNI 写入 Xray 配置（自动备份原文件）并重启服务
 
 ### 检测指标与评分权重
@@ -139,11 +150,19 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 - 日本：电商 / 社区 / 大学 / 政府 / 企业（49）
 - 香港：社区 / 大学 / 政府 / 金融 / 航空（50）
 - 韩国：电商 / 社区 / 大学 / 政府 / 金融（50）
+- 台湾：电商 / 社区 / 大学 / 政府 / 金融（50）
 - 新加坡：电商 / 大学 / 政府 / 金融 / 航空（50）
 - 马来西亚（20）
+- 菲律宾：电商 / 社区 / 大学 / 政府 / 金融（50）
+- 泰国：电商 / 社区 / 大学 / 政府 / 金融（50）
+- 越南：电商 / 社区 / 大学 / 政府 / 金融（50）
+- 乌克兰：电商 / 社区 / 大学 / 政府 / 金融（50）
 - 英国（30）
 - 欧洲大陆（30）
 - 美国（20）
+- 交友社交类（40+）
+- 美食生活类（22）
+- 流媒体与全球品牌（30+）
 
 ---
 
@@ -151,22 +170,27 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 
 ### Introduction
 
-`WHERE-IS-SNI` provides a curated pool of **399 candidate domains** and a Bash scoring script to help you find the optimal SNI for the Xray REALITY protocol.
+`WHERE-IS-SNI` provides a curated pool of **773 candidate domains** and a Bash scoring script to help you find the optimal SNI for the Xray REALITY protocol.
 
 ### Files
 
 | File | Description |
 |------|-------------|
-| `domains.txt` | 399 candidate domains covering global regions and industries |
+| `domains.txt` | 773 candidate domains covering global regions and industries |
 | `sni-finder.sh` | Auto-test script: random pick, probe, score, JSON output |
 | `sni-finder-run.sh` | One-liner install & run script |
 | `.gitignore` | Ignore local config files |
 
 ### Usage
 
-**One-liner:**
+**One-liner (random 15):**
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+**Test specific domains:**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh) shopee.vn tiki.vn sendo.vn
 ```
 
 Or clone locally:
@@ -178,35 +202,41 @@ cd WHERE-IS-SNI
 # 2. Make it executable
 chmod +x sni-finder.sh
 
-# 3. Run directly (random 10 domains)
+# 3. Run directly (random 15 domains)
 bash sni-finder.sh
 
-# 4. Specify sample size
+# 4. Test specific domains
+bash sni-finder.sh www.samsung.com www.sony.com www.intel.com
+
+# 5. Specify sample size
 bash sni-finder.sh -n 5
 
-# 5. Custom timeout (seconds)
+# 6. Custom timeout (seconds)
 bash sni-finder.sh -t 3
 
-# 6. Custom domain list file
+# 7. Custom domain list file
 bash sni-finder.sh -l my-domains.txt
 
-# 7. Output to file
+# 8. Output to file
 bash sni-finder.sh -o result.json
 
-# 8. Auto-apply best SNI, skip menu
+# 9. Auto-apply best SNI, skip menu
 bash sni-finder.sh -y
 
-# 9. JSON only, no menu
+# 10. JSON only, no menu
 bash sni-finder.sh --no-menu
 
-# 10. Specify Xray config path
+# 11. Specify Xray config path
 bash sni-finder.sh -y --xray-config /etc/xray/config.json
 
-# 11. Verbose progress
+# 12. Verbose progress
 bash sni-finder.sh -v
 
-# 12. Combine options
+# 13. Combine options
 bash sni-finder.sh -n 8 -t 4 -o result.json -v
+
+# 14. Specific domains + auto-apply
+bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 ```
 
 ### Interactive Menu
@@ -220,7 +250,7 @@ After testing, three options appear:
 ```
 
 - **0** — Exit
-- **1** — Pick new random domains and re-test
+- **1** — Pick new random domains and re-test (or re-test same domains in specify mode)
 - **2** — Write best SNI to Xray config (auto-backup) and restart service
 
 ### Scoring Breakdown
@@ -254,11 +284,19 @@ After testing, three options appear:
 - Japan: e-commerce / community / university / government / enterprise (49)
 - Hong Kong: community / university / government / finance / aviation (50)
 - Korea: e-commerce / community / university / government / finance (50)
+- Taiwan: e-commerce / community / university / government / finance (50)
 - Singapore: e-commerce / university / government / finance / aviation (50)
 - Malaysia (20)
+- Philippines: e-commerce / community / university / government / finance (50)
+- Thailand: e-commerce / community / university / government / finance (50)
+- Vietnam: e-commerce / community / university / government / finance (50)
+- Ukraine: e-commerce / community / university / government / finance (50)
 - United Kingdom (30)
 - Continental Europe (30)
 - United States (20)
+- Social & dating (40+)
+- Food & lifestyle (22)
+- Streaming & global brands (30+)
 
 ---
 
@@ -266,22 +304,27 @@ After testing, three options appear:
 
 ### مقدمه
 
-`WHERE-IS-SNI` یک مجموعه از **۳۹۹ دامنه** و یک اسکریپت Bash برای یافتن بهترین SNI برای پروتکل REALITY در Xray است.
+`WHERE-IS-SNI` یک مجموعه از **۷۷۳ دامنه** و یک اسکریپت Bash برای یافتن بهترین SNI برای پروتکل REALITY در Xray است.
 
 ### فایل‌ها
 
 | فایل | توضیحات |
 |-------|---------|
-| `domains.txt` | ۳۹۹ دامنه کاندید از مناطق و صنایع مختلف جهان |
+| `domains.txt` | ۷۷۳ دامنه کاندید از مناطق و صنایع مختلف جهان |
 | `sni-finder.sh` | اسکریپت تست خودکار: انتخاب تصادفی، بررسی، امتیازدهی، خروجی JSON |
 | `sni-finder-run.sh` | اسکریپت نصب و اجرای یک‌خطی |
 | `.gitignore` | نادیده گرفتن فایل‌های کانفیگ محلی |
 
 ### نحوه استفاده
 
-**اجرای یک‌خطی:**
+**اجرای یک‌خطی (۱۵ دامنه تصادفی):**
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
+```
+
+**تست دامنه‌های مشخص:**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh) shopee.vn tiki.vn sendo.vn
 ```
 
 یا کلون کردن:
@@ -293,28 +336,31 @@ cd WHERE-IS-SNI
 # ۲. اجرایی کردن اسکریپت
 chmod +x sni-finder.sh
 
-# ۳. اجرای مستقیم (۱۰ دامنه تصادفی)
+# ۳. اجرای مستقیم (۱۵ دامنه تصادفی)
 bash sni-finder.sh
 
-# ۴. تعیین تعداد دامنه
+# ۴. تست دامنه‌های مشخص
+bash sni-finder.sh www.samsung.com www.sony.com www.intel.com
+
+# ۵. تعیین تعداد دامنه
 bash sni-finder.sh -n 5
 
-# ۵. تعیین زمان انتظار (ثانیه)
+# ۶. تعیین زمان انتظار (ثانیه)
 bash sni-finder.sh -t 3
 
-# ۶. استفاده از لیست دامنه شخصی
+# ۷. استفاده از لیست دامنه شخصی
 bash sni-finder.sh -l my-domains.txt
 
-# ۷. ذخیره خروجی در فایل
+# ۸. ذخیره خروجی در فایل
 bash sni-finder.sh -o result.json
 
-# ۸. اعمال خودکار SNI برتر، رد کردن منو
+# ۹. اعمال خودکار SNI برتر، رد کردن منو
 bash sni-finder.sh -y
 
-# ۹. فقط خروجی JSON، بدون منو
+# ۱۰. فقط خروجی JSON، بدون منو
 bash sni-finder.sh --no-menu
 
-# ۱۰. تعیین مسیر کانفیگ Xray
+# ۱۱. تعیین مسیر کانفیگ Xray
 bash sni-finder.sh -y --xray-config /etc/xray/config.json
 
 # ۱۱. نمایش جزئیات پیشرفت
@@ -369,8 +415,16 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 - ژاپن (۴۹)
 - هنگ‌کنگ (۵۰)
 - کره جنوبی (۵۰)
+- تایوان (۵۰)
 - سنگاپور (۵۰)
 - مالزی (۲۰)
+- فیلیپین (۵۰)
+- تایلند (۵۰)
+- ویتنام (۵۰)
+- اوکراین (۵۰)
 - بریتانیا (۳۰)
 - اروپا (۳۰)
 - آمریکا (۲۰)
+- شبکه‌های اجتماعی و دوستیابی (۴۰+)
+- غذا و سبک زندگی (۲۲)
+- استریم و برندهای جهانی (۳۰+)
