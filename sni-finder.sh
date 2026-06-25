@@ -11,11 +11,11 @@ usage() {
 sni-finder.sh v$SNI_FINDER_VERSION — Find the best SNI for REALITY protocol
 
 Usage:
-  $0 [options]
+  $0 [options] [domain1 domain2 ...]
 
 Options:
   -l FILE     Domain pool file (default: ./domains.txt)
-  -n NUM      Number of domains to test (default: 10)
+  -n NUM      Number of domains to test (default: 15)
   -t SEC      Timeout per test in seconds (default: 5)
   -o FILE     Write JSON output to file (default: stdout)
   -y          Auto-apply best SNI to Xray config (no menu)
@@ -24,6 +24,12 @@ Options:
   -h          Show this help
   --xray-config PATH  Specify Xray config file path
   --no-menu   Skip interactive menu, just output
+
+Examples:
+  $0                          Random 15 domains from pool
+  $0 -n 5                    Random 5 domains
+  $0 example.com foo.org     Test specific domains
+  $0 -y --xray-config /etc/xray/config.json  Auto-apply
 EOF
   exit 0
 }
@@ -89,6 +95,10 @@ while getopts "l:n:t:o:yvVh" opt; do
 done
 
 log() { $VERBOSE && echo "[*] $*" >&2; }
+
+# Collect positional args as specific domains to test
+shift $((OPTIND - 1))
+SPECIFIC_DOMAINS=("$@")
 
 # --- Load domain pool ---
 load_pool() {
@@ -482,23 +492,28 @@ show_menu() {
 
 # --- Main ---
 run_test() {
-  load_pool "$POOL_FILE"
+  local selected=()
+  local pool_size=0
 
-  local pool_size=${#pool[@]}
-  if [[ $pool_size -eq 0 ]]; then
-    echo '{"error": "No domains in pool"}' >&2
-    exit 1
+  if [[ ${#SPECIFIC_DOMAINS[@]} -gt 0 ]]; then
+    selected=("${SPECIFIC_DOMAINS[@]}")
+    pool_size=${#selected[@]}
+    log "Testing ${#selected[@]} specified domain(s): ${selected[*]}"
+  else
+    load_pool "$POOL_FILE"
+    pool_size=${#pool[@]}
+    if [[ $pool_size -eq 0 ]]; then
+      echo '{"error": "No domains in pool"}' >&2
+      exit 1
+    fi
+    local sample_size=$COUNT
+    [[ $sample_size -gt $pool_size ]] && sample_size=$pool_size
+    read -ra selected <<< "$(pick_random "$sample_size" "${pool[@]}")"
+    log "Pool: $pool_size domains, testing: $sample_size"
+    log "Selected: ${selected[*]}"
   fi
 
-  local sample_size=$COUNT
-  [[ $sample_size -gt $pool_size ]] && sample_size=$pool_size
-
-  # Randomly select domains
-  read -ra selected <<< "$(pick_random "$sample_size" "${pool[@]}")"
   local total=${#selected[@]}
-
-  log "Pool: $pool_size domains, testing: $total"
-  log "Selected: ${selected[*]}"
 
   # Test each domain with progress
   local raw_results=()
