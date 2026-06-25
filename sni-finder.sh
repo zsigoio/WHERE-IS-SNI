@@ -494,10 +494,12 @@ show_menu() {
 run_test() {
   local selected=()
   local pool_size=0
+  local sample_size=0
 
   if [[ ${#SPECIFIC_DOMAINS[@]} -gt 0 ]]; then
     selected=("${SPECIFIC_DOMAINS[@]}")
     pool_size=${#selected[@]}
+    sample_size=$pool_size
     log "Testing ${#selected[@]} specified domain(s): ${selected[*]}"
   else
     load_pool "$POOL_FILE"
@@ -506,7 +508,7 @@ run_test() {
       echo '{"error": "No domains in pool"}' >&2
       exit 1
     fi
-    local sample_size=$COUNT
+    sample_size=$COUNT
     [[ $sample_size -gt $pool_size ]] && sample_size=$pool_size
     read -ra selected <<< "$(pick_random "$sample_size" "${pool[@]}")"
     log "Pool: $pool_size domains, testing: $sample_size"
