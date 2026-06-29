@@ -779,3 +779,11 @@ proton.me
 mediafire.com
 wormhole.app
 send-anywhere.com
+mirrors.edge.kernel.org
+mirror.freedif.org
+knb.ecoinformatics.org
+xviewdataset.org
+pximg.net
+images.unsplash.com
+itch.io
+amd-assets.itch.zone
