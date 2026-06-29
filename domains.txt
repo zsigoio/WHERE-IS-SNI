@@ -774,3 +774,8 @@ www.toyota.com
 box.com
 www.pcloud.com
 koofr.eu
+terabox.com
+proton.me
+mediafire.com
+wormhole.app
+send-anywhere.com
