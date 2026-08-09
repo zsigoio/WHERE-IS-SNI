@@ -1,6 +1,5 @@
 docker.com
 hub.docker.com
-github.io
 npmjs.com
 pypi.org
 python.org
@@ -49,11 +48,9 @@ sciencedirect.com
 springer.com
 wiley.com
 wordpress.org
-wikimedia.org
 pixabay.com
 unsplash.com
 pexels.com
-archive.org
 mdn.mozilla.org
 gitter.im
 readthedocs.io
@@ -63,11 +60,7 @@ w3.org
 canva.com
 sketchfab.com
 artstation.com
-behance.net
 dribbble.com
-vimeo.com
-bandcamp.com
-soundcloud.com
 digitalocean.com
 linode.com
 vultr.com
@@ -80,11 +73,9 @@ fastly.com
 akamai.com
 backblaze.com
 wasabi.com
-speedtest.net
 cloudflarestatus.com
 statuspage.io
 discourse.org
-slack.com
 trello.com
 zoom.us
 webex.com
@@ -94,7 +85,6 @@ gnu.org
 linuxfoundation.org
 ietf.org
 icann.org
-openstreetmap.org
 creativecommons.org
 ted.com
 gutenberg.org
@@ -111,8 +101,6 @@ www.muji.com
 www.uniqlo.com
 askul.co.jp
 bookoffonline.co.jp
-nicovideo.jp
-www.pixiv.net
 hatenablog.jp
 qiita.com
 5ch.net
@@ -317,7 +305,6 @@ thestar.com.my
 sinchew.com.my
 maxis.com.my
 celcomdigi.com
-bbc.co.uk
 gov.uk
 nhs.uk
 metoffice.gov.uk
@@ -340,9 +327,6 @@ argos.co.uk
 autotrader.co.uk
 rightmove.co.uk
 zoopla.co.uk
-theguardian.com
-telegraph.co.uk
-independent.co.uk
 royalmail.com
 easyjet.com
 ee.co.uk
@@ -367,7 +351,6 @@ spiegel.de
 zeit.de
 lemonde.fr
 lefigaro.fr
-www.dw.com
 bahn.de
 www.sncf.com
 ns.nl
@@ -390,10 +373,6 @@ loc.gov
 nih.gov
 usps.com
 weather.com
-nytimes.com
-washingtonpost.com
-wsj.com
-bloomberg.com
 homedepot.com
 target.com
 bestbuy.com
@@ -762,7 +741,6 @@ www.panasonic.com
 www.intel.com
 www.nvidia.com
 www.amd.com
-www.spotify.com
 www.nintendo.com
 www.playstation.com
 www.ea.com
@@ -775,7 +753,6 @@ box.com
 www.pcloud.com
 koofr.eu
 terabox.com
-proton.me
 mediafire.com
 wormhole.app
 send-anywhere.com
@@ -783,7 +760,6 @@ mirrors.edge.kernel.org
 mirror.freedif.org
 knb.ecoinformatics.org
 xviewdataset.org
-pximg.net
 images.unsplash.com
 itch.io
 amd-assets.itch.zone
@@ -854,18 +830,14 @@ azure.com
 adnxs.com
 ipinfo.io
 steamserver.net
-nel.goog
 digicert.com
-ggpht.com
 kgslb.com
 windows.com
 taboola.com
 featureassets.org
 clarity.ms
 appier.net
-pki.goog
 lencr.org
-dns.google
 nexon.com
 clmbtech.com
 zdf.de
