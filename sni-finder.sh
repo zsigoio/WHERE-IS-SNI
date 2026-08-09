@@ -163,11 +163,12 @@ test_domain() {
   # --- TCP + TLS ---
   local reachable=false tls_version="" tls_ms=-1
   local cert_size=0 cert_chain_len=0 key_type="" issuer=""
+  local alpn="" kex=""
 
   if $dns_ok; then
     local tls_start tls_end raw
     tls_start=$(date +%s%N)
-    raw=$(timeout "$TIMEOUT" openssl s_client -connect "$domain:443" -servername "$domain" -showcerts 2>/dev/null < /dev/null)
+    raw=$(timeout "$TIMEOUT" openssl s_client -connect "$domain:443" -servername "$domain" -showcerts -alpn h2,http/1.1 -msg 2>&1 < /dev/null)
     tls_end=$(date +%s%N)
 
     if [[ "$raw" == *"BEGIN CERTIFICATE"* ]]; then
@@ -176,6 +177,15 @@ test_domain() {
 
       # TLS version
       tls_version=$(sed -n '/^New, TLS/{s/New, //; s/, Cipher.*//p; q}' <<< "$raw")
+
+      # ALPN negotiation (h2 / http/1.1)
+      alpn=$(grep -i "ALPN protocol" <<< "$raw" | head -1 | sed 's/.*ALPN protocol: *//' | tr -d '\n\r')
+
+      # Key exchange: TLS 1.3 via -msg (Negotiated TLS1.3 group), TLS 1.2 via Server Temp Key
+      kex=$(grep -i "Negotiated TLS1.3 group" <<< "$raw" | head -1 | sed 's/.*group: *//' | tr -d '\n\r')
+      if [[ -z "$kex" ]]; then
+        kex=$(grep -i "Server Temp Key" <<< "$raw" | head -1 | sed 's/.*Key: *//' | awk '{print $1}' | tr -d '\n\r')
+      fi
 
       # Certificate chain
       local certs
@@ -225,7 +235,29 @@ test_domain() {
     key_class="other"
   fi
 
-  echo "$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms" | tr -d '\r'
+  # --- Normalize ALPN ---
+  local alpn_class
+  if [[ "$alpn" == *"h2"* ]]; then
+    alpn_class="h2"
+  elif [[ "$alpn" == *"http/1.1"* ]]; then
+    alpn_class="http1.1"
+  else
+    alpn_class="none"
+  fi
+
+  # --- Normalize key exchange ---
+  local kex_class
+  if [[ "$kex" == *"X25519MLKEM768"* || "$kex" == *"X25519Kyber768"* ]]; then
+    kex_class="MLKEM768"
+  elif [[ "$kex" == *"X25519"* ]]; then
+    kex_class="X25519"
+  elif [[ "$kex" == *"ECDHE"* || "$kex" == *"P-256"* || "$kex" == *"P-384"* ]]; then
+    kex_class="ECDHE"
+  else
+    kex_class="other"
+  fi
+
+  echo "$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms|$alpn_class|$kex_class" | tr -d '\r'
 }
 
 # --- Scoring ---
@@ -243,7 +275,7 @@ score_domains() {
     # Skip entries with no pipe delimiters (corrupted data)
     [[ "$row" != *"|"* ]] && continue
 
-    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms <<< "$row"
+    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
     # Skip entries with empty domain
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
@@ -275,7 +307,7 @@ score_domains() {
   [[ $certsize_range -eq 0 ]] && certsize_range=1
 
   for row in "${data[@]}"; do
-    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms <<< "$row"
+    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
     [[ "$reachable" != "true" && "$reachable" != "false" ]] && continue
@@ -296,37 +328,52 @@ score_domains() {
       score=$(( score + lat_score ))
     fi
 
-    # 3. TLS version (15%)
+    # 3. TLS version (12%)
     if [[ "${tls_version,,}" == *"tlsv1.3"* || "${tls_version,,}" == *"tls 1.3"* ]]; then
-      score=$(( score + 15 ))
+      score=$(( score + 12 ))
     elif [[ "${tls_version,,}" == *"tlsv1.2"* || "${tls_version,,}" == *"tls 1.2"* ]]; then
       score=$(( score + 3 ))
     fi
 
-    # 4. Cert size (15%) - relative
+    # 4. ALPN h2 (8%)
+    case "$alpn_class" in
+      h2)       score=$(( score + 8 )) ;;
+      http1.1)  score=$(( score + 3 )) ;;
+      *)        score=$(( score + 0 )) ;;
+    esac
+
+    # 5. Key exchange (10%)
+    case "$kex_class" in
+      MLKEM768) score=$(( score + 10 )) ;;
+      X25519)   score=$(( score + 7 )) ;;
+      ECDHE)    score=$(( score + 4 )) ;;
+      *)        score=$(( score + 1 )) ;;
+    esac
+
+    # 6. Cert size (10%) - relative
     if [[ $cert_size -gt 0 ]]; then
       local csize_raw=$(( (cert_size - min_certsize) * 100 / certsize_range ))
-      local csize_score=$(( 15 - (csize_raw * 15 / 100) ))
+      local csize_score=$(( 10 - (csize_raw * 10 / 100) ))
       [[ $csize_score -lt 0 ]] && csize_score=0
       score=$(( score + csize_score ))
     fi
 
-    # 5. Key type (15%)
+    # 7. Key type (10%)
     case "$key_class" in
-      ECDSA) score=$(( score + 15 )) ;;
-      RSA)   score=$(( score + 10 )) ;;
-      *)     score=$(( score + 3 )) ;;
+      ECDSA) score=$(( score + 10 )) ;;
+      RSA)   score=$(( score + 6 )) ;;
+      *)     score=$(( score + 2 )) ;;
     esac
 
-    # 6. DNS (10%) - relative
+    # 8. DNS (5%) - relative
     if [[ $dns_ms -ge 0 ]]; then
       local dns_raw=$(( (dns_ms - min_dns) * 100 / dns_range ))
-      local dns_score=$(( 10 - (dns_raw * 10 / 100) ))
+      local dns_score=$(( 5 - (dns_raw * 5 / 100) ))
       [[ $dns_score -lt 0 ]] && dns_score=0
       score=$(( score + dns_score ))
     fi
 
-    scores+=("$score|$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms")
+    scores+=("$score|$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms|$alpn_class|$kex_class")
   done
 
   # Sort by score descending
@@ -364,7 +411,7 @@ output_json() {
 
   local first=true
   for row in "${results[@]}"; do
-    IFS='|' read -r score domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms <<< "$row"
+    IFS='|' read -r score domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms alpn_class kex_class <<< "$row"
 
     # Skip corrupted entries in output
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
@@ -377,6 +424,8 @@ output_json() {
     json+="      \"score\": $score,\n"
     json+="      \"reachable\": $reachable,\n"
     json+="      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
+    json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
+    json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
     json+="      \"tls_ms\": $tls_ms,\n"
     json+="      \"ping_ms\": $ping_ms,\n"
     json+="      \"cert_size_bytes\": $cert_size,\n"

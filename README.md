@@ -97,10 +97,12 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 |------|------|------|
 | TCP 连通性 | 25% | 不同则整条记 0 分 |
 | 延迟 | 20% | ping + TLS 握手综合耗时 |
-| TLS 版本 | 15% | 1.3 满分，1.2 折半 |
-| 证书链大小 | 15% | 越小越高分 |
-| 密钥类型 | 15% | ECDSA 优先 |
-| DNS 解析 | 10% | 越快越高分 |
+| TLS 版本 | 12% | 1.3 满分（12），1.2 仅 3 分 |
+| ALPN h2 | 8% | h2 满分（8），仅 http/1.1 得 3 分 |
+| 密钥交换 | 10% | X25519MLKEM768 满分（10），X25519 得 7 分 |
+| 证书链大小 | 10% | 越小越高分 |
+| 密钥类型 | 10% | ECDSA 满分（10），RSA 得 6 分 |
+| DNS 解析 | 5% | 越快越高分 |
 
 ### JSON 输出示例
 
@@ -110,20 +112,22 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
   "version": "1.0.0",
   "timestamp": "2026-06-24T10:30:00Z",
   "best_sni": "notion.so",
-  "pool_size": 399,
-  "sample_size": 10,
+  "pool_size": 853,
+  "sample_size": 15,
   "results": [
     {
-      "sni": "notion.so",
-      "score": 88,
+      "sni": "columbia.edu",
+      "score": 94,
       "reachable": true,
       "tls_version": "TLSv1.3",
+      "alpn": "h2",
+      "kex": "MLKEM768",
       "tls_ms": 45,
       "ping_ms": 12,
-      "cert_size_bytes": 2861,
-      "cert_chain_len": 2,
+      "cert_size_bytes": 3574,
+      "cert_chain_len": 3,
       "key_type": "ECDSA",
-      "issuer": "DigiCert Inc",
+      "issuer": "C=US",
       "dns_ms": 5
     }
   ]
@@ -259,10 +263,12 @@ After testing, three options appear:
 |--------|--------|-------------|
 | TCP connectivity | 25% | Score 0 if unreachable |
 | Latency | 20% | ping + TLS handshake combined |
-| TLS version | 15% | 1.3 full score, 1.2 half |
-| Cert chain size | 15% | Smaller = better |
-| Key type | 15% | ECDSA preferred |
-| DNS resolution | 10% | Faster = better |
+| TLS version | 12% | 1.3 full (12), 1.2 only 3 |
+| ALPN h2 | 8% | h2 full (8), http/1.1 only 3 |
+| Key exchange | 10% | X25519MLKEM768 full (10), X25519 7 |
+| Cert chain size | 10% | Smaller = better |
+| Key type | 10% | ECDSA full (10), RSA 6 |
+| DNS resolution | 5% | Faster = better |
 
 ### Dependencies
 
@@ -390,10 +396,12 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 |-------|------|---------|
 | اتصال TCP | ۲۵٪ | در صورت عدم اتصال امتیاز صفر |
 | تأخیر | ۲۰٪ | مجموع ping و TLS handshake |
-| نسخه TLS | ۱۵٪ | ۱.۳ امتیاز کامل، ۱.۲ نصف |
-| اندازه زنجیره گواهی | ۱۵٪ | کوچکتر = بهتر |
-| نوع کلید | ۱۵٪ | ECDSA اولویت دارد |
-| DNS | ۱۰٪ | سریعتر = بهتر |
+| نسخه TLS | ۱۲٪ | ۱.۳ امتیاز کامل (۱۲)، ۱.۲ فقط ۳ |
+| ALPN h2 | ۸٪ | h2 کامل (۸)، فقط http/1.1 یعنی ۳ |
+| تبادل کلید | ۱۰٪ | X25519MLKEM768 کامل (۱۰)، X25519 یعنی ۷ |
+| اندازه زنجیره گواهی | ۱۰٪ | کوچکتر = بهتر |
+| نوع کلید | ۱۰٪ | ECDSA کامل (۱۰)، RSA یعنی ۶ |
+| DNS | ۵٪ | سریعتر = بهتر |
 
 ### وابستگی‌ها
 
