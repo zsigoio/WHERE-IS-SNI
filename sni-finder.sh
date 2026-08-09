@@ -24,6 +24,7 @@ Options:
   -h          Show this help
   --xray-config PATH  Specify Xray config file path
   --no-menu   Skip interactive menu, just output
+  --max-latency MS    Max latency for scoring (default: 300ms)
 
 Examples:
   $0                          Random 15 domains from pool
@@ -67,6 +68,7 @@ VERBOSE=false
 AUTO_APPLY=false
 NO_MENU=false
 XRAY_CONFIG=""
+MAX_LATENCY_MS=300
 
 # Parse long options first
 LONGOPTS=()
@@ -74,6 +76,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --xray-config) XRAY_CONFIG="$2"; shift 2 ;;
     --no-menu) NO_MENU=true; shift ;;
+    --max-latency) MAX_LATENCY_MS="$2"; shift 2 ;;
     --) shift; break ;;
     *) LONGOPTS+=("$1"); shift ;;
   esac
@@ -282,8 +285,11 @@ score_domains() {
 
     if [[ "$reachable" == "true" ]]; then
       local total_ms=$(( (tls_ms > 0 ? tls_ms : 0) + (ping_ms > 0 ? ping_ms : 0) ))
-      [[ $total_ms -lt $min_latency ]] && min_latency=$total_ms
-      [[ $total_ms -gt $max_latency ]] && max_latency=$total_ms
+      # Only collect latency for relative scoring if under the cap
+      if [[ $total_ms -le $MAX_LATENCY_MS ]]; then
+        [[ $total_ms -lt $min_latency ]] && min_latency=$total_ms
+        [[ $total_ms -gt $max_latency ]] && max_latency=$total_ms
+      fi
     fi
 
     [[ $dns_ms -ge 0 && $dns_ms -lt $min_dns ]] && min_dns=$dns_ms
@@ -319,13 +325,15 @@ score_domains() {
       score=$(( score + 25 ))
     fi
 
-    # 2. latency (20%) - relative
+    # 2. latency (20%) - relative, 0 if over cap
     if [[ "$reachable" == "true" ]]; then
       local total_ms=$(( (tls_ms > 0 ? tls_ms : 0) + (ping_ms > 0 ? ping_ms : 0) ))
-      local lat_raw=$(( (total_ms - min_latency) * 100 / latency_range ))
-      local lat_score=$(( 20 - (lat_raw * 20 / 100) ))
-      [[ $lat_score -lt 0 ]] && lat_score=0
-      score=$(( score + lat_score ))
+      if [[ $total_ms -le $MAX_LATENCY_MS ]]; then
+        local lat_raw=$(( (total_ms - min_latency) * 100 / latency_range ))
+        local lat_score=$(( 20 - (lat_raw * 20 / 100) ))
+        [[ $lat_score -lt 0 ]] && lat_score=0
+        score=$(( score + lat_score ))
+      fi
     fi
 
     # 3. TLS version (12%)
