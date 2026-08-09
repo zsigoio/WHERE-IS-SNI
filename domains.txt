@@ -868,3 +868,14 @@ lencr.org
 dns.google
 nexon.com
 clmbtech.com
+zdf.de
+ardmediathek.de
+joyn.de
+wdr.de
+ndr.de
+hetzner.de
+your-server.de
+magentacloud.de
+strato.de
+gamestar.de
+chip.de
