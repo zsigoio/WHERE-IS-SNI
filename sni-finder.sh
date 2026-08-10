@@ -35,30 +35,6 @@ EOF
   exit 0
 }
 
-# --- Default built-in domains (fallback if no pool file) ---
-BUILTIN_DOMAINS=(
-  docker.com hub.docker.com github.io npmjs.com pypi.org
-  python.org golang.org rust-lang.org debian.org ubuntu.com
-  archlinux.org postgresql.org sqlite.org redis.io apache.org
-  nginx.org php.net jsdelivr.com unpkg.com cdnjs.com
-  bitbucket.org gitlab.com kernel.org llvm.org godotengine.org
-  harvard.edu stanford.edu mit.edu berkeley.edu cam.ac.uk
-  ox.ac.uk princeton.edu yale.edu columbia.edu cornell.edu
-  nyu.edu ucla.edu washington.edu toronto.edu ethz.ch
-  kyoto-u.ac.jp anu.edu.au nus.edu.sg nasa.gov cern.ch
-  ieee.org nature.com sciencedirect.com springer.com wiley.com
-  wordpress.org wikimedia.org pixabay.com unsplash.com pexels.com
-  archive.org mdn.mozilla.org gitter.im readthedocs.io gitbook.com
-  latex-project.org w3.org canva.com sketchfab.com artstation.com
-  behance.net dribbble.com vimeo.com bandcamp.com soundcloud.com
-  digitalocean.com linode.com vultr.com hetzner.com ovhcloud.com
-  namecheap.com godaddy.com hostinger.com fastly.com akamai.com
-  backblaze.com wasabi.com speedtest.net cloudflarestatus.com
-  statuspage.io discourse.org slack.com trello.com zoom.us webex.com
-  eff.org fsf.org gnu.org linuxfoundation.org ietf.org
-  icann.org openstreetmap.org creativecommons.org ted.com gutenberg.org
-)
-
 # --- Cloudflare IP ranges (official: https://www.cloudflare.com/ips-v4, /ips-v6) ---
 # Script fetches fresh lists at runtime; these are offline fallbacks.
 CLOUDFLARE_IPV4_RANGES=(
@@ -169,13 +145,6 @@ load_pool() {
   local file="$1"
   if [[ -f "$file" ]]; then
     mapfile -t pool < <(grep -vE '^\s*(#|$)' "$file" | tr -d '\r' | sed '/^$/d')
-    if [[ ${#pool[@]} -eq 0 ]]; then
-      log "Pool file '$file' is empty, using built-in defaults"
-      pool=("${BUILTIN_DOMAINS[@]}")
-    fi
-  else
-    log "Pool file '$file' not found, using built-in defaults"
-    pool=("${BUILTIN_DOMAINS[@]}")
   fi
 }
 

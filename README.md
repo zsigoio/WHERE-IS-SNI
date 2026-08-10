@@ -8,13 +8,13 @@
 
 ### 简介
 
-`WHERE-IS-SNI` 提供一个包含 **773 个**候选域名的池子和一个 Bash 评分脚本，帮助你为 Xray REALITY 协议找到最优 SNI。
+`WHERE-IS-SNI` 提供一个包含 **693 个**候选域名的池子和一个 Bash 评分脚本，帮助你为 Xray REALITY 协议找到最优 SNI。
 
 ### 文件说明
 
 | 文件 | 说明 |
 |------|------|
-| `domains.txt` | 773 个候选域名，覆盖全球各地理区域和行业 |
+| `domains.txt` | 693 个候选域名，覆盖全球各地理区域和行业 |
 | `sni-finder.sh` | 自动测试脚本：随机抽取、检测、评分、输出 JSON |
 | `sni-finder-run.sh` | 一键安装运行脚本（curl 直用） |
 | `.gitignore` | 忽略本地配置文件 |
@@ -79,18 +79,19 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 
 ### 交互菜单
 
-运行后出现三个选项：
+运行后出现四个选项：
 
 ```
  0) Exit
  1) Re-test with new random domains
  2) Apply 'best-sni' to Xray config and restart
- 3) 
+  3) Browse domains by country
 ```
 
 - **0** — 退出
 - **1** — 重新随机抽选域名测试（若使用指定域名模式则重新测试相同域名）
 - **2** — 将最优 SNI 写入 Xray 配置（自动备份原文件）并重启服务
+- **3** — 按国家/地区分类浏览测试结果（通过 ip.im 查询 GeoIP）
 
 ### 检测指标与评分权重
 
@@ -115,7 +116,7 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
   "version": "1.0.0",
   "timestamp": "2026-06-24T10:30:00Z",
   "best_sni": "notion.so",
-  "pool_size": 853,
+   "pool_size": 693,
   "sample_size": 15,
   "results": [
     {
@@ -148,19 +149,22 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 | `shuf` | 随机抽取 | ✅ GNU coreutils 自带 |
 | `timeout` | 超时控制 | ✅ GNU coreutils 自带 |
 
+### 域名池覆盖
+
+> 详见 `domains.txt`
 ---
 
 ## 🇬🇧 English
 
 ### Introduction
 
-`WHERE-IS-SNI` provides a curated pool of **773 candidate domains** and a Bash scoring script to help you find the optimal SNI for the Xray REALITY protocol.
+`WHERE-IS-SNI` provides a curated pool of **693 candidate domains** and a Bash scoring script to help you find the optimal SNI for the Xray REALITY protocol.
 
 ### Files
 
 | File | Description |
 |------|-------------|
-| `domains.txt` | 773 candidate domains covering global regions and industries |
+| `domains.txt` | 693 candidate domains covering global regions and industries |
 | `sni-finder.sh` | Auto-test script: random pick, probe, score, JSON output |
 | `sni-finder-run.sh` | One-liner install & run script |
 | `.gitignore` | Ignore local config files |
@@ -225,17 +229,19 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 
 ### Interactive Menu
 
-After testing, three options appear:
+After testing, four options appear:
 
 ```
  0) Exit
  1) Re-test with new random domains
  2) Apply 'best-sni' to Xray config and restart
+ 3) Browse domains by country
 ```
 
 - **0** — Exit
 - **1** — Pick new random domains and re-test (or re-test same domains in specify mode)
 - **2** — Write best SNI to Xray config (auto-backup) and restart service
+- **3** — Browse tested results grouped by country (GeoIP via ip.im)
 
 ### Scoring Breakdown
 
@@ -264,27 +270,7 @@ After testing, three options appear:
 
 ### Domain Pool Coverage
 
-- International open source & developer tools (25)
-- Overseas universities & research (25)
-- Open source media, design & documentation (20)
-- Cloud services & IT infrastructure (20)
-- Non-profit & open standards (10)
-- Japan: e-commerce / community / university / government / enterprise (49)
-- Hong Kong: community / university / government / finance / aviation (50)
-- Korea: e-commerce / community / university / government / finance (50)
-- Taiwan: e-commerce / community / university / government / finance (50)
-- Singapore: e-commerce / university / government / finance / aviation (50)
-- Malaysia (20)
-- Philippines: e-commerce / community / university / government / finance (50)
-- Thailand: e-commerce / community / university / government / finance (50)
-- Vietnam: e-commerce / community / university / government / finance (50)
-- Ukraine: e-commerce / community / university / government / finance (50)
-- United Kingdom (30)
-- Continental Europe (30)
-- United States (20)
-- Social & dating (40+)
-- Food & lifestyle (22)
-- Streaming & global brands (30+)
+> See `domains.txt` for full list.
 
 ---
 
@@ -292,13 +278,13 @@ After testing, three options appear:
 
 ### مقدمه
 
-`WHERE-IS-SNI` یک مجموعه از **۷۷۳ دامنه** و یک اسکریپت Bash برای یافتن بهترین SNI برای پروتکل REALITY در Xray است.
+`WHERE-IS-SNI` یک مجموعه از **۶۹۳ دامنه** و یک اسکریپت Bash برای یافتن بهترین SNI برای پروتکل REALITY در Xray است.
 
 ### فایل‌ها
 
 | فایل | توضیحات |
 |-------|---------|
-| `domains.txt` | ۷۷۳ دامنه کاندید از مناطق و صنایع مختلف جهان |
+| `domains.txt` | ۶۹۳ دامنه کاندید از مناطق و صنایع مختلف جهان |
 | `sni-finder.sh` | اسکریپت تست خودکار: انتخاب تصادفی، بررسی، امتیازدهی، خروجی JSON |
 | `sni-finder-run.sh` | اسکریپت نصب و اجرای یک‌خطی |
 | `.gitignore` | نادیده گرفتن فایل‌های کانفیگ محلی |
@@ -360,17 +346,19 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 
 ### منوی تعاملی
 
-پس از تست، سه گزینه نمایش داده می‌شود:
+پس از تست، چهار گزینه نمایش داده می‌شود:
 
 ```
  0) خروج
  1) تست مجدد با دامنه‌های تصادفی جدید
  2) اعمال SNI برتر در کانفیگ Xray و راه‌اندازی مجدد
+ 3) مرور دامنه‌ها بر اساس کشور
 ```
 
 - **۰** — خروج
 - **۱** — انتخاب تصادفی دامنه‌های جدید و تست مجدد
 - **۲** — نوشتن بهترین SNI در کانفیگ Xray (پشتیبان‌گیری خودکار) و راه‌اندازی مجدد سرویس
+- **۳** — مرور نتایج تست بر اساس کشور (GeoIP از طریق ip.im)
 
 ### معیارهای امتیازدهی
 
@@ -399,24 +387,4 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 
 ### پوشش دامنه‌ها
 
-- ابزارهای متن‌باز و توسعه (۲۵)
-- دانشگاه‌ها و مراکز تحقیقاتی (۲۵)
-- رسانه و محتوای متن‌باز (۲۰)
-- سرویس‌های ابری و زیرساخت IT (۲۰)
-- سازمان‌های غیرانتفاعی (۱۰)
-- ژاپن (۴۹)
-- هنگ‌کنگ (۵۰)
-- کره جنوبی (۵۰)
-- تایوان (۵۰)
-- سنگاپور (۵۰)
-- مالزی (۲۰)
-- فیلیپین (۵۰)
-- تایلند (۵۰)
-- ویتنام (۵۰)
-- اوکراین (۵۰)
-- بریتانیا (۳۰)
-- اروپا (۳۰)
-- آمریکا (۲۰)
-- شبکه‌های اجتماعی و دوستیابی (۴۰+)
-- غذا و سبک زندگی (۲۲)
-- استریم و برندهای جهانی (۳۰+)
+> فهرست کامل در `domains.txt` موجود است.
