@@ -469,10 +469,8 @@ score_domains() {
 
     local score=0
 
-    # Cloudflare-hosted: hard 0 score, skip all scoring
+    # Cloudflare-hosted: exclude entirely, no output
     if [[ "$cf" == "true" ]]; then
-      # score|domain|cf|reachable|tls|tls_ms|ping_ms|cert_size|chain_len|key_class|issuer|dns_ms|alpn|kex
-      scores+=("0|$domain|true|false||-1|-1|0|0|unknown||$dns_ms|none|other")
       continue
     fi
 
@@ -587,22 +585,17 @@ output_json() {
     json+="      \"sni\": \"$(json_escape "$domain")\",\n"
     json+="      \"score\": $score,\n"
     json+="      \"reachable\": $reachable,\n"
-    json+="      \"cloudflare\": $cf"
-    if [[ "$cf" == "true" ]]; then
-      # CF-hosted: no test params (all empty anyway)
-      json+=",\n      \"dns_ms\": $dns_ms\n"
-    else
-      json+=",\n      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
-      json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
-      json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
-      json+="      \"tls_ms\": $tls_ms,\n"
-      json+="      \"ping_ms\": $ping_ms,\n"
-      json+="      \"cert_size_bytes\": $cert_size,\n"
-      json+="      \"cert_chain_len\": $chain_len,\n"
-      json+="      \"key_type\": \"$(json_escape "$key_class")\",\n"
-      json+="      \"issuer\": \"$(json_escape "$issuer")\",\n"
-      json+="      \"dns_ms\": $dns_ms\n"
-    fi
+    json+="      \"cloudflare\": $cf,\n"
+    json+="      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
+    json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
+    json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
+    json+="      \"tls_ms\": $tls_ms,\n"
+    json+="      \"ping_ms\": $ping_ms,\n"
+    json+="      \"cert_size_bytes\": $cert_size,\n"
+    json+="      \"cert_chain_len\": $chain_len,\n"
+    json+="      \"key_type\": \"$(json_escape "$key_class")\",\n"
+    json+="      \"issuer\": \"$(json_escape "$issuer")\",\n"
+    json+="      \"dns_ms\": $dns_ms\n"
     json+="    }"
   done
 
