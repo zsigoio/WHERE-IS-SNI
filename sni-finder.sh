@@ -59,6 +59,18 @@ BUILTIN_DOMAINS=(
   icann.org openstreetmap.org creativecommons.org ted.com gutenberg.org
 )
 
+# --- Cloudflare IP ranges (from https://www.cloudflare.com/ips-v4, /ips-v6) ---
+CLOUDFLARE_IPV4_RANGES=(
+  "173.245.48.0/20" "103.21.244.0/22" "103.22.200.0/22" "103.31.4.0/22"
+  "141.101.64.0/18" "108.162.192.0/18" "190.93.240.0/20" "188.114.96.0/20"
+  "197.234.240.0/22" "198.41.128.0/17" "162.158.0.0/15" "104.16.0.0/13"
+  "104.24.0.0/14" "172.64.0.0/13" "131.0.72.0/22"
+)
+CLOUDFLARE_IPV6_RANGES=(
+  "2400:cb00::/32" "2606:4700::/32" "2803:f800::/32"
+  "2405:b500::/32" "2405:8100::/32" "2a06:98c0::/29" "2c0f:f248::/32"
+)
+
 # --- Parse arguments ---
 POOL_FILE="$DEFAULT_POOL"
 COUNT="$DEFAULT_COUNT"
@@ -144,23 +156,144 @@ pick_random() {
   fi
 }
 
+# --- Resolve all A/AAAA records for a domain ---
+# Sets global CF_IPV4_LIST and CF_IPV6_LIST (space separated)
+resolve_host_ips() {
+  local domain="$1"
+  CF_IPV4_LIST=""
+  CF_IPV6_LIST=""
+
+  local records
+  records=$(getent ahosts "$domain" 2>/dev/null | awk '{print $1}')
+  if [[ -z "$records" ]]; then
+    records=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}')
+  fi
+
+  local ip
+  for ip in $records; do
+    if [[ "$ip" == *":"* ]]; then
+      CF_IPV6_LIST="$CF_IPV6_LIST $ip"
+    else
+      CF_IPV4_LIST="$CF_IPV4_LIST $ip"
+    fi
+  done
+}
+
+# --- Check if an IPv4 is inside Cloudflare ranges (pure awk, no bitwise ops) ---
+is_cloudflare_ipv4() {
+  local ip="$1"
+  local ranges="${CLOUDFLARE_IPV4_RANGES[*]}"
+  awk -v ip="$ip" -v ranges="$ranges" '
+    function ip2int(a,  o){
+      split(a, o, ".");
+      return o[1]*16777216 + o[2]*65536 + o[3]*256 + o[4];
+    }
+    BEGIN {
+      n = ip2int(ip);
+      split(ranges, r, " ");
+      for (i in r) {
+        split(r[i], p, "/");
+        prefix = p[2] + 0;
+        block = 2^(32 - prefix);
+        net = ip2int(p[1]) - (ip2int(p[1]) % block);
+        if (n >= net && n < net + block) exit 0;
+      }
+      exit 1;
+    }'
+}
+
+# --- Check if an IPv6 is inside Cloudflare ranges (hex string comparison) ---
+is_cloudflare_ipv6() {
+  local ip="$1"
+  local ranges="${CLOUDFLARE_IPV6_RANGES[*]}"
+  awk -v ip="$ip" -v ranges="$ranges" '
+    function hexval(c){
+      return index("0123456789abcdef", tolower(c)) - 1;
+    }
+    function strtonum16(s,  v, i, c) {
+      v = 0;
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1);
+        v = v * 16 + hexval(c);
+      }
+      return v;
+    }
+    function ip6hex(a,  out, parts, head, tail, hg, tg, nhead, ntail, i, cnt) {
+      # Expand compressed IPv6 into 32 hex chars
+      if (a == "::") { return "00000000000000000000000000000000" }
+      split(a, parts, "::");
+      head = parts[1]; tail = (length(parts) > 1) ? parts[2] : "";
+      nhead = (head == "") ? 0 : split(head, hg, ":");
+      ntail = (tail == "") ? 0 : split(tail, tg, ":");
+      out = "";
+      for (i = 1; i <= nhead; i++) out = out sprintf("%04x", strtonum16(hg[i]));
+      cnt = 8 - nhead - ntail;
+      for (i = 1; i <= cnt; i++) out = out "0000";
+      for (i = 1; i <= ntail; i++) out = out sprintf("%04x", strtonum16(tg[i]));
+      return out;
+    }
+    BEGIN {
+      target = ip6hex(ip);
+      split(ranges, r, " ");
+      for (i in r) {
+        split(r[i], p, "/");
+        nethex = ip6hex(p[1]);
+        prefix = p[2] + 0;
+        full = int(prefix / 4);
+        rem = prefix % 4;
+        if (substr(target, 1, full) != substr(nethex, 1, full)) continue;
+        if (rem > 0) {
+          a = hexval(substr(target, full + 1, 1));
+          b = hexval(substr(nethex, full + 1, 1));
+          shift = 4 - rem;
+          if (int(a / (16 ^ shift)) != int(b / (16 ^ shift))) continue;
+        }
+        exit 0;
+      }
+      exit 1;
+    }'
+}
+
 # --- Test a single domain ---
 test_domain() {
   local domain="$1"
 
   # --- DNS resolution ---
-  local dns_ms=-1 dns_ok=false host_ip=""
+  local dns_ms=-1 dns_ok=false
   local dns_start dns_end
   dns_start=$(date +%s%N 2>/dev/null)
-  host_ip=$(getent hosts "$domain" 2>/dev/null | awk '{print $1; exit}')
+  resolve_host_ips "$domain"
   dns_end=$(date +%s%N 2>/dev/null)
-  if [[ -z "$host_ip" ]]; then
-    host_ip=$(ping -c 1 -W 1 "$domain" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-    dns_end=$(date +%s%N 2>/dev/null)
-  fi
-  if [[ -n "$host_ip" ]]; then
+
+  if [[ -n "$CF_IPV4_LIST" || -n "$CF_IPV6_LIST" ]]; then
     dns_ok=true
     dns_ms=$(( (dns_end - dns_start) / 1000000 ))
+  fi
+
+  # --- Cloudflare CDN check (skip all tests if hosted on CF) ---
+  local cf=false
+  if $dns_ok; then
+    local ip
+    for ip in $CF_IPV4_LIST; do
+      if is_cloudflare_ipv4 "$ip"; then
+        cf=true
+        break
+      fi
+    done
+    if [[ "$cf" != "true" ]]; then
+      for ip in $CF_IPV6_LIST; do
+        if is_cloudflare_ipv6 "$ip"; then
+          cf=true
+          break
+        fi
+      done
+    fi
+    if [[ "$cf" == "true" ]]; then
+      # Cloudflare-hosted: score 0, skip all tests, move to next domain
+      # domain|cf|reachable|tls|tls_ms|ping_ms|cert_size|chain_len|key_class|key_type|issuer|dns_ms|alpn|kex
+      echo "$domain|true|false||-1|-1|0|0|unknown|||$dns_ms|none|other" | tr -d '\r'
+      return 0
+    fi
   fi
 
   # --- TCP + TLS ---
@@ -214,7 +347,7 @@ test_domain() {
 
   # --- Ping ---
   local ping_ms=-1
-  if command -v ping &>/dev/null && [[ -n "$host_ip" ]]; then
+  if command -v ping &>/dev/null && [[ -n "$CF_IPV4_LIST" ]]; then
     local ping_output
     ping_output=$(timeout 3 ping -c 1 -W 2 "$domain" 2>/dev/null)
     if [[ -n "$ping_output" ]]; then
@@ -260,7 +393,7 @@ test_domain() {
     kex_class="other"
   fi
 
-  echo "$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms|$alpn_class|$kex_class" | tr -d '\r'
+  echo "$domain|$cf|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms|$alpn_class|$kex_class" | tr -d '\r'
 }
 
 # --- Scoring ---
@@ -278,10 +411,11 @@ score_domains() {
     # Skip entries with no pipe delimiters (corrupted data)
     [[ "$row" != *"|"* ]] && continue
 
-    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
-    # Skip entries with empty domain
+    # Skip entries with empty domain or Cloudflare-hosted (score 0)
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
+    [[ "$cf" == "true" ]] && continue
 
     if [[ "$reachable" == "true" ]]; then
       local total_ms=$(( (tls_ms > 0 ? tls_ms : 0) + (ping_ms > 0 ? ping_ms : 0) ))
@@ -313,12 +447,19 @@ score_domains() {
   [[ $certsize_range -eq 0 ]] && certsize_range=1
 
   for row in "${data[@]}"; do
-    IFS='|' read -r domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
     [[ "$reachable" != "true" && "$reachable" != "false" ]] && continue
 
     local score=0
+
+    # Cloudflare-hosted: hard 0 score, skip all scoring
+    if [[ "$cf" == "true" ]]; then
+      # score|domain|cf|reachable|tls|tls_ms|ping_ms|cert_size|chain_len|key_class|issuer|dns_ms|alpn|kex
+      scores+=("0|$domain|true|false||-1|-1|0|0|unknown||$dns_ms|none|other")
+      continue
+    fi
 
     # 1. connectivity (25%)
     if [[ "$reachable" == "true" ]]; then
@@ -381,7 +522,7 @@ score_domains() {
       score=$(( score + dns_score ))
     fi
 
-    scores+=("$score|$domain|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms|$alpn_class|$kex_class")
+    scores+=("$score|$domain|$cf|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms|$alpn_class|$kex_class")
   done
 
   # Sort by score descending
@@ -419,7 +560,7 @@ output_json() {
 
   local first=true
   for row in "${results[@]}"; do
-    IFS='|' read -r score domain reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r score domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms alpn_class kex_class <<< "$row"
 
     # Skip corrupted entries in output
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
@@ -431,6 +572,7 @@ output_json() {
     json+="      \"sni\": \"$(json_escape "$domain")\",\n"
     json+="      \"score\": $score,\n"
     json+="      \"reachable\": $reachable,\n"
+    json+="      \"cloudflare\": $cf,\n"
     json+="      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
     json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
     json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
@@ -589,9 +731,11 @@ run_test() {
 
     # Quick parse for result indicator
     local row="${raw_results[-1]}"
-    if [[ "$row" == *"|true|"* ]]; then
+    if [[ "$row" == *"|true|false|"* ]]; then
+      printf '\r[%2d/%d] %-35s ☁ Cloudflare skipped\n' "$idx" "$total" "$domain" >&2
+    elif [[ "$row" == *"|false|true|"* ]]; then
       local ver ms
-      IFS='|' read -r _ _ ver ms _ <<< "$row"
+      IFS='|' read -r _ _ _ ver ms _ <<< "$row"
       printf '\r[%2d/%d] %-35s ✓ %s %sms\n' "$idx" "$total" "$domain" "$ver" "$ms" >&2
     else
       printf '\r[%2d/%d] %-35s ✗ unreachable\n' "$idx" "$total" "$domain" >&2
@@ -606,7 +750,7 @@ run_test() {
   done < <(score_domains raw_results)
 
   # Get best SNI
-  IFS='|' read -r best_score best_sni best_reachable _ <<< "${scored[0]}"
+  IFS='|' read -r best_score best_sni _ best_reachable _ <<< "${scored[0]}"
 
   # Output
   if [[ -n "$OUTPUT_FILE" ]]; then

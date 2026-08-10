@@ -104,6 +104,8 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
 | 密钥类型 | 10% | ECDSA 满分（10），RSA 得 6 分 |
 | DNS 解析 | 5% | 越快越高分 |
 
+> ⚠️ **Cloudflare 域名直接判 0 分**：DNS 解析出的 IP（含 IPv6）落在 Cloudflare CDN 段内（[官方 IP 列表](https://www.cloudflare.com/ips-v4)）的域名，直接跳过所有测试、总分记 0。防止回退流量被 CF 劫持/偷跑。
+
 ### JSON 输出示例
 
 ```json
@@ -119,6 +121,7 @@ bash sni-finder.sh -y www.cloudflare.com www.fastly.com
       "sni": "columbia.edu",
       "score": 94,
       "reachable": true,
+      "cloudflare": false,
       "tls_version": "TLSv1.3",
       "alpn": "h2",
       "kex": "MLKEM768",
@@ -270,6 +273,8 @@ After testing, three options appear:
 | Key type | 10% | ECDSA full (10), RSA 6 |
 | DNS resolution | 5% | Faster = better |
 
+> ⚠️ **Cloudflare domains score 0**: Domains whose DNS IPs (IPv4/IPv6) fall within Cloudflare CDN ranges ([official list](https://www.cloudflare.com/ips-v4)) are skipped entirely with score 0, to prevent fallback traffic from being hijacked by CF.
+
 ### Dependencies
 
 | Tool | Purpose | Pre-installed |
@@ -402,6 +407,8 @@ bash sni-finder.sh -n 8 -t 4 -o result.json -v
 | اندازه زنجیره گواهی | ۱۰٪ | کوچکتر = بهتر |
 | نوع کلید | ۱۰٪ | ECDSA کامل (۱۰)، RSA یعنی ۶ |
 | DNS | ۵٪ | سریعتر = بهتر |
+
+> ⚠️ **دامنه‌های Cloudflare امتیاز صفر**: دامنه‌هایی که IP آن‌ها (IPv4/IPv6) در محدوده CDN کلادفلر باشد ([لیست رسمی](https://www.cloudflare.com/ips-v4))، کاملاً رد شده و امتیاز صفر می‌گیرند تا از ربودن ترافیک fallback توسط CF جلوگیری شود.
 
 ### وابستگی‌ها
 
