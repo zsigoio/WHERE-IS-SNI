@@ -59,7 +59,8 @@ BUILTIN_DOMAINS=(
   icann.org openstreetmap.org creativecommons.org ted.com gutenberg.org
 )
 
-# --- Cloudflare IP ranges (from https://www.cloudflare.com/ips-v4, /ips-v6) ---
+# --- Cloudflare IP ranges (official: https://www.cloudflare.com/ips-v4, /ips-v6) ---
+# Script fetches fresh lists at runtime; these are offline fallbacks.
 CLOUDFLARE_IPV4_RANGES=(
   "173.245.48.0/20" "103.21.244.0/22" "103.22.200.0/22" "103.31.4.0/22"
   "141.101.64.0/18" "108.162.192.0/18" "190.93.240.0/20" "188.114.96.0/20"
@@ -69,7 +70,21 @@ CLOUDFLARE_IPV4_RANGES=(
 CLOUDFLARE_IPV6_RANGES=(
   "2400:cb00::/32" "2606:4700::/32" "2803:f800::/32"
   "2405:b500::/32" "2405:8100::/32" "2a06:98c0::/29" "2c0f:f248::/32"
+  "2c00:f080::/32"
 )
+
+# --- Refresh CF ranges from official lists (silent fallback to built-ins) ---
+refresh_cloudflare_ranges() {
+  local v4 v6
+  v4=$(curl -fsSL --max-time 5 https://www.cloudflare.com/ips-v4 2>/dev/null | grep -E '^[0-9]+\.' | tr -d '\r')
+  v6=$(curl -fsSL --max-time 5 https://www.cloudflare.com/ips-v6 2>/dev/null | grep -E '^[0-9a-fA-F]+:' | tr -d '\r')
+  if [[ -n "$v4" ]]; then
+    mapfile -t CLOUDFLARE_IPV4_RANGES <<< "$v4"
+  fi
+  if [[ -n "$v6" ]]; then
+    mapfile -t CLOUDFLARE_IPV6_RANGES <<< "$v6"
+  fi
+}
 
 # --- Parse arguments ---
 POOL_FILE="$DEFAULT_POOL"
@@ -572,17 +587,22 @@ output_json() {
     json+="      \"sni\": \"$(json_escape "$domain")\",\n"
     json+="      \"score\": $score,\n"
     json+="      \"reachable\": $reachable,\n"
-    json+="      \"cloudflare\": $cf,\n"
-    json+="      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
-    json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
-    json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
-    json+="      \"tls_ms\": $tls_ms,\n"
-    json+="      \"ping_ms\": $ping_ms,\n"
-    json+="      \"cert_size_bytes\": $cert_size,\n"
-    json+="      \"cert_chain_len\": $chain_len,\n"
-    json+="      \"key_type\": \"$(json_escape "$key_class")\",\n"
-    json+="      \"issuer\": \"$(json_escape "$issuer")\",\n"
-    json+="      \"dns_ms\": $dns_ms\n"
+    json+="      \"cloudflare\": $cf"
+    if [[ "$cf" == "true" ]]; then
+      # CF-hosted: no test params (all empty anyway)
+      json+=",\n      \"dns_ms\": $dns_ms\n"
+    else
+      json+=",\n      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
+      json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
+      json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
+      json+="      \"tls_ms\": $tls_ms,\n"
+      json+="      \"ping_ms\": $ping_ms,\n"
+      json+="      \"cert_size_bytes\": $cert_size,\n"
+      json+="      \"cert_chain_len\": $chain_len,\n"
+      json+="      \"key_type\": \"$(json_escape "$key_class")\",\n"
+      json+="      \"issuer\": \"$(json_escape "$issuer")\",\n"
+      json+="      \"dns_ms\": $dns_ms\n"
+    fi
     json+="    }"
   done
 
@@ -697,6 +717,9 @@ run_test() {
   local selected=()
   local pool_size=0
   local sample_size=0
+
+  # Refresh Cloudflare ranges from official lists (fallback to built-ins)
+  refresh_cloudflare_ranges
 
   if [[ ${#SPECIFIC_DOMAINS[@]} -gt 0 ]]; then
     selected=("${SPECIFIC_DOMAINS[@]}")
