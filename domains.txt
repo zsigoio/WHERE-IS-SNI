@@ -653,7 +653,6 @@ hetzner.de
 your-server.de
 magentacloud.de
 strato.de
-gamestar.de
 chip.de
 dailymotion.com
 deezer.com
@@ -668,15 +667,12 @@ vbox7.com
 wetransfer.com
 mega.nz
 pcloud.com
-icedrive.net
 infomaniak.com
-scaleway.com
 nextcloud.com
 gmx.net
 web.de
 zalando.com
 zalando.de
-cdiscount.com
 otto.de
 emag.ro
 asos.com
@@ -684,7 +680,6 @@ fnac.com
 coolblue.nl
 kaufland.de
 farfetch.com
-cdon.com
 ard.de
 france.tv
 arte.tv
