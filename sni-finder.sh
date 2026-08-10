@@ -86,6 +86,40 @@ refresh_cloudflare_ranges() {
   fi
 }
 
+# --- GeoIP: country code for an IP (ip.im primary, ip-api.com fallback) ---
+geoip_country() {
+  local ip="$1"
+  local resp
+  resp=$(curl -fsSL --max-time 4 "https://ip.im/$ip" 2>/dev/null | grep -i "^Country:" | head -1 | awk '{print $2}' | tr -d '\r')
+  if [[ -z "$resp" ]]; then
+    resp=$(curl -fsSL --max-time 4 "http://ip-api.com/json/$ip?fields=status,countryCode" 2>/dev/null | grep -o '"countryCode":"[^"]*"' | head -1 | cut -d'"' -f4 | tr -d '\r')
+  fi
+  echo "${resp:-UNKNOWN}"
+}
+
+# --- ISO 3166-1 alpha-2 -> country name (common set) ---
+country_name() {
+  local code="${1^^}"
+  case "$code" in
+    AD) echo "Andorra";; AE) echo "UAE";; AR) echo "Argentina";; AT) echo "Austria";;
+    AU) echo "Australia";; BE) echo "Belgium";; BG) echo "Bulgaria";; BR) echo "Brazil";;
+    CA) echo "Canada";; CH) echo "Switzerland";; CN) echo "China";; CY) echo "Cyprus";;
+    CZ) echo "Czechia";; DE) echo "Germany";; DK) echo "Denmark";; EE) echo "Estonia";;
+    ES) echo "Spain";; FI) echo "Finland";; FR) echo "France";; GB) echo "United Kingdom";;
+    GR) echo "Greece";; HK) echo "Hong Kong";; HR) echo "Croatia";; HU) echo "Hungary";;
+    ID) echo "Indonesia";; IE) echo "Ireland";; IL) echo "Israel";; IN) echo "India";;
+    IS) echo "Iceland";; IT) echo "Italy";; JP) echo "Japan";; KR) echo "South Korea";;
+    LT) echo "Lithuania";; LU) echo "Luxembourg";; LV) echo "Latvia";; MD) echo "Moldova";;
+    MX) echo "Mexico";; MY) echo "Malaysia";; NL) echo "Netherlands";; NO) echo "Norway";;
+    NZ) echo "New Zealand";; PH) echo "Philippines";; PL) echo "Poland";; PT) echo "Portugal";;
+    RO) echo "Romania";; RS) echo "Serbia";; RU) echo "Russia";; SE) echo "Sweden";;
+    SG) echo "Singapore";; SI) echo "Slovenia";; SK) echo "Slovakia";; TH) echo "Thailand";;
+    TR) echo "Turkey";; TW) echo "Taiwan";; UA) echo "Ukraine";; US) echo "United States";;
+    VN) echo "Vietnam";; ZA) echo "South Africa";;
+    *) echo "$code";;
+  esac
+}
+
 # --- Parse arguments ---
 POOL_FILE="$DEFAULT_POOL"
 COUNT="$DEFAULT_COUNT"
@@ -669,12 +703,125 @@ apply_sni() {
   return 0
 }
 
+# --- Browse tested domains by country (GeoIP via ip.im) ---
+browse_by_country() {
+  local -n scored_ref="$1"
+
+  # Collect only reachable, non-CF entries
+  local -a rows=()
+  local row
+  for row in "${scored_ref[@]}"; do
+    local r_domain r_reachable
+    IFS='|' read -r _ r_domain _ r_reachable _ <<< "$row"
+    [[ -z "$r_domain" || "$r_domain" =~ ^[0-9]+$ ]] && continue
+    [[ "$r_reachable" == "true" ]] && rows+=("$row")
+  done
+
+  if [[ ${#rows[@]} -eq 0 ]]; then
+    echo "No reachable domains to browse." >&2
+    return 0
+  fi
+
+  # Ask how many top domains to check
+  echo "Enter number of top domains to check (default: all, ${#rows[@]}):" >&2
+  read -r -p "> " num
+  num=$(echo "$num" | tr -cd '0-9')
+  if [[ -z "$num" || "$num" -le 0 || "$num" -gt ${#rows[@]} ]]; then
+    num=${#rows[@]}
+  fi
+
+  # Resolve IP + query country for each selected domain
+  local -a geo_rows=()   # "country|domain|row"
+  local i=0
+  for row in "${rows[@]:0:$num}"; do
+    local g_domain g_ip g_country
+    IFS='|' read -r _ g_domain _ <<< "$row"
+    i=$((i + 1))
+    printf '[%d/%d] %s ...' "$i" "$num" "$g_domain" >&2
+
+    resolve_host_ips "$g_domain"
+    g_ip=$(echo "$CF_IPV4_LIST" | awk '{print $1}')
+    if [[ -z "$g_ip" ]]; then
+      g_country="UNKNOWN"
+    else
+      g_country=$(geoip_country "$g_ip")
+    fi
+    printf '\r[%d/%d] %-35s → %s\n' "$i" "$num" "$g_domain" "$g_country" >&2
+    geo_rows+=("$g_country|$g_domain|$row")
+  done
+
+  # Group by country, keep first-seen order
+  local -a country_codes=()
+  local -a country_domains=()  # "code|domain1|domain2..."
+  local g
+  for g in "${geo_rows[@]}"; do
+    local code d
+    code="${g%%|*}"
+    d="${g#*|}"
+    d="${d%%|*}"
+    local found=false idx=0
+    for ((j = 0; j < ${#country_codes[@]}; j++)); do
+      if [[ "${country_codes[j]}" == "$code" ]]; then
+        found=true
+        idx=$j
+        break
+      fi
+    done
+    if $found; then
+      country_domains[idx]="${country_domains[idx]}|$d"
+    else
+      country_codes+=("$code")
+      country_domains+=("$code|$d")
+    fi
+  done
+
+  # Show country list (numbered from 0)
+  echo >&2
+  echo "==============================" >&2
+  echo "Country classification:" >&2
+  for ((j = 0; j < ${#country_codes[@]}; j++)); do
+    local cname cc cnt
+    cc="${country_codes[j]}"
+    cname="$(country_name "$cc")"
+    cnt=$(echo "${country_domains[j]}" | awk -F'|' '{print NF-1}')
+    echo "  $j) $cc ($cname) - $cnt domain(s)" >&2
+  done
+  echo "==============================" >&2
+
+  read -r -p "Enter country number: " pick
+  pick=$(echo "$pick" | tr -cd '0-9')
+  if [[ -z "$pick" || "$pick" -ge ${#country_codes[@]} ]]; then
+    echo "Invalid selection." >&2
+    return 0
+  fi
+
+  # Show domains of selected country with their measured info
+  local sel_code="${country_codes[pick]}"
+  echo >&2
+  echo "Domains in $sel_code ($(country_name "$sel_code")):" >&2
+  local g
+  for g in "${geo_rows[@]}"; do
+    local code d row2
+    code="${g%%|*}"
+    rest="${g#*|}"
+    d="${rest%%|*}"
+    row2="${rest#*|}"
+    [[ "$code" != "$sel_code" ]] && continue
+    local s tls alpn kex tls_ms ping_ms kc
+    IFS='|' read -r s _ _ _ tls tls_ms ping_ms _ _ kc _ _ alpn kex <<< "$row2"
+    printf '  [score %-3s] %-30s %s %s %s %s %sms\n' "$s" "$d" "$tls" "$alpn" "$kex" "$kc" "$tls_ms" >&2
+  done
+  echo >&2
+  read -r -p "Press Enter to return to menu..." _ >&2
+}
+
 # --- Interactive menu ---
 show_menu() {
   local best_sni="$1"
   local best_score="$2"
   local best_reachable="$3"
   local config_path="$4"
+  local scored_ref="$5"
 
   while true; do
     echo >&2
@@ -686,8 +833,9 @@ show_menu() {
     else
       echo " 2) (unavailable - no reachable domain)" >&2
     fi
+    echo " 3) Browse domains by country" >&2
     echo "==============================" >&2
-    read -r -p "Choose [0-2]: " choice
+    read -r -p "Choose [0-3]: " choice
 
     case "$choice" in
       0) exit 0 ;;
@@ -699,6 +847,13 @@ show_menu() {
         fi
         apply_sni "$best_sni" "$config_path"
         exit $?
+        ;;
+      3)
+        if [[ -n "$scored_ref" ]]; then
+          browse_by_country "$scored_ref"
+        else
+          echo "No results available." >&2
+        fi
         ;;
       *) echo "Invalid choice." >&2 ;;
     esac
@@ -758,9 +913,9 @@ run_test() {
     fi
   done
 
-  # Score and sort
+  # Score and sort (scored is global so menu option 3 can use it)
   echo "Scoring..." >&2
-  local scored=()
+  scored=()
   while IFS= read -r line; do
     scored+=("$line")
   done < <(score_domains raw_results)
@@ -805,7 +960,7 @@ main() {
       break
     fi
 
-    show_menu "$best_sni" "$best_score" "$best_reachable" "$XRAY_CONFIG"
+    show_menu "$best_sni" "$best_score" "$best_reachable" "$XRAY_CONFIG" scored
     ret=$?
     [[ $ret -eq 1 ]] && continue || break
   done
