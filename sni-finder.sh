@@ -213,14 +213,17 @@ resolve_host_ips() {
   CF_IPV6_LIST=""
 
   local records
-  records=$(getent ahosts "$domain" 2>/dev/null | awk '{print $1}')
+  records=$(getent ahosts "$domain" 2>/dev/null | awk '{print $1}' | sort -u)
   if [[ -z "$records" ]]; then
-    records=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}')
+    records=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | sort -u)
   fi
 
   local ip
   for ip in $records; do
-    if [[ "$ip" == *":"* ]]; then
+    # Skip IPv4-mapped IPv6 (::ffff:a.b.c.d) — it's an IPv4 in disguise
+    if [[ "$ip" == "::ffff:"* ]]; then
+      CF_IPV4_LIST="$CF_IPV4_LIST ${ip#::ffff:}"
+    elif [[ "$ip" == *":"* ]]; then
       CF_IPV6_LIST="$CF_IPV6_LIST $ip"
     else
       CF_IPV4_LIST="$CF_IPV4_LIST $ip"
@@ -339,8 +342,8 @@ test_domain() {
     fi
     if [[ "$cf" == "true" ]]; then
       # Cloudflare-hosted: score 0, skip all tests, move to next domain
-      # domain|cf|reachable|tls|tls_ms|ping_ms|cert_size|chain_len|key_class|key_type|issuer|dns_ms|alpn|kex
-      echo "$domain|true|false||-1|-1|0|0|unknown|||$dns_ms|none|other" | tr -d '\r'
+      # domain|cf|reachable|cert_valid|tls|tls_ms|ping_ms|cert_size|chain_len|key_class|key_type|issuer|dns_ms|alpn|kex
+      echo "$domain|true|false|false||-1|-1|0|0|unknown|||$dns_ms|none|other" | tr -d '\r'
       return 0
     fi
   fi
@@ -349,16 +352,22 @@ test_domain() {
   local reachable=false tls_version="" tls_ms=-1
   local cert_size=0 cert_chain_len=0 key_type="" issuer=""
   local alpn="" kex=""
+  local cert_valid=false
 
   if $dns_ok; then
     local tls_start tls_end raw
     tls_start=$(date +%s%N)
-    raw=$(timeout "$TIMEOUT" openssl s_client -connect "$domain:443" -servername "$domain" -showcerts -alpn h2,http/1.1 -msg 2>&1 < /dev/null)
+    raw=$(timeout "$TIMEOUT" openssl s_client -connect "$domain:443" -servername "$domain" -showcerts -alpn h2,http/1.1 -msg -verify_hostname "$domain" 2>&1 < /dev/null)
     tls_end=$(date +%s%N)
 
     if [[ "$raw" == *"BEGIN CERTIFICATE"* ]]; then
       reachable=true
       tls_ms=$(( (tls_end - tls_start) / 1000000 ))
+
+      # Certificate chain trusted + hostname matches (aligned with 3x-ui CertValid)
+      if [[ "$raw" == *"Verify return code: 0 (ok)"* ]]; then
+        cert_valid=true
+      fi
 
       # TLS version
       tls_version=$(sed -n '/^New, TLS/{s/New, //; s/, Cipher.*//p; q}' <<< "$raw")
@@ -442,7 +451,7 @@ test_domain() {
     kex_class="other"
   fi
 
-  echo "$domain|$cf|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms|$alpn_class|$kex_class" | tr -d '\r'
+  echo "$domain|$cf|$reachable|$cert_valid|$tls_version|$tls_ms|$ping_ms|$cert_size|$cert_chain_len|$key_class|$key_type|$issuer|$dns_ms|$alpn_class|$kex_class" | tr -d '\r'
 }
 
 # --- Scoring ---
@@ -460,7 +469,7 @@ score_domains() {
     # Skip entries with no pipe delimiters (corrupted data)
     [[ "$row" != *"|"* ]] && continue
 
-    IFS='|' read -r domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r domain cf reachable cert_valid tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
     # Skip entries with empty domain or Cloudflare-hosted (score 0)
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
@@ -496,7 +505,7 @@ score_domains() {
   [[ $certsize_range -eq 0 ]] && certsize_range=1
 
   for row in "${data[@]}"; do
-    IFS='|' read -r domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r domain cf reachable cert_valid tls_version tls_ms ping_ms cert_size chain_len key_class key_type issuer dns_ms alpn_class kex_class <<< "$row"
 
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
     [[ "$reachable" != "true" && "$reachable" != "false" ]] && continue
@@ -505,6 +514,11 @@ score_domains() {
 
     # Cloudflare-hosted: exclude entirely, no output
     if [[ "$cf" == "true" ]]; then
+      continue
+    fi
+
+    # Certificate not trusted for SNI: exclude entirely (aligned with 3x-ui Feasible)
+    if [[ "$reachable" == "true" && "$cert_valid" != "true" ]]; then
       continue
     fi
 
@@ -569,7 +583,7 @@ score_domains() {
       score=$(( score + dns_score ))
     fi
 
-    scores+=("$score|$domain|$cf|$reachable|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms|$alpn_class|$kex_class")
+    scores+=("$score|$domain|$cf|$reachable|$cert_valid|$tls_version|$tls_ms|$ping_ms|$cert_size|$chain_len|$key_class|$issuer|$dns_ms|$alpn_class|$kex_class")
   done
 
   # Sort by score descending
@@ -607,7 +621,7 @@ output_json() {
 
   local first=true
   for row in "${results[@]}"; do
-    IFS='|' read -r score domain cf reachable tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms alpn_class kex_class <<< "$row"
+    IFS='|' read -r score domain cf reachable cert_valid tls_version tls_ms ping_ms cert_size chain_len key_class issuer dns_ms alpn_class kex_class <<< "$row"
 
     # Skip corrupted entries in output
     [[ -z "$domain" || "$domain" =~ ^[0-9]+$ ]] && continue
@@ -620,6 +634,7 @@ output_json() {
     json+="      \"score\": $score,\n"
     json+="      \"reachable\": $reachable,\n"
     json+="      \"cloudflare\": $cf,\n"
+    json+="      \"cert_valid\": $cert_valid,\n"
     json+="      \"tls_version\": \"$(json_escape "$tls_version")\",\n"
     json+="      \"alpn\": \"$(json_escape "$alpn_class")\",\n"
     json+="      \"kex\": \"$(json_escape "$kex_class")\",\n"
@@ -712,7 +727,7 @@ browse_by_country() {
   local row
   for row in "${scored_ref[@]}"; do
     local r_domain r_reachable
-    IFS='|' read -r _ r_domain _ r_reachable _ <<< "$row"
+    IFS='|' read -r _ r_domain _ r_reachable _ _ <<< "$row"
     [[ -z "$r_domain" || "$r_domain" =~ ^[0-9]+$ ]] && continue
     [[ "$r_reachable" == "true" ]] && rows+=("$row")
   done
@@ -808,7 +823,7 @@ browse_by_country() {
     row2="${rest#*|}"
     [[ "$code" != "$sel_code" ]] && continue
     local s tls alpn kex tls_ms ping_ms kc
-    IFS='|' read -r s _ _ _ tls tls_ms ping_ms _ _ kc _ _ alpn kex <<< "$row2"
+    IFS='|' read -r s _ _ _ _ tls tls_ms ping_ms _ _ kc _ _ alpn kex <<< "$row2"
     printf '  [score %-3s] %-30s %s %s %s %s %sms\n' "$s" "$d" "$tls" "$alpn" "$kex" "$kc" "$tls_ms" >&2
   done
   echo >&2
@@ -901,13 +916,18 @@ run_test() {
     raw_results+=("$(test_domain "$domain")")
 
     # Quick parse for result indicator
+    # row format: domain|cf|reachable|cert_valid|tls|tls_ms|...
     local row="${raw_results[-1]}"
-    if [[ "$row" == *"|true|false|"* ]]; then
+    local p_cf p_reach p_cert
+    IFS='|' read -r _ p_cf p_reach p_cert _ <<< "$row"
+    if [[ "$p_cf" == "true" ]]; then
       printf '\r[%2d/%d] %-35s ☁ Cloudflare skipped\n' "$idx" "$total" "$domain" >&2
-    elif [[ "$row" == *"|false|true|"* ]]; then
+    elif [[ "$p_reach" == "true" && "$p_cert" == "true" ]]; then
       local ver ms
-      IFS='|' read -r _ _ _ ver ms _ <<< "$row"
+      IFS='|' read -r _ _ _ _ ver ms _ <<< "$row"
       printf '\r[%2d/%d] %-35s ✓ %s %sms\n' "$idx" "$total" "$domain" "$ver" "$ms" >&2
+    elif [[ "$p_reach" == "true" && "$p_cert" == "false" ]]; then
+      printf '\r[%2d/%d] %-35s ⚠ cert invalid\n' "$idx" "$total" "$domain" >&2
     else
       printf '\r[%2d/%d] %-35s ✗ unreachable\n' "$idx" "$total" "$domain" >&2
     fi
@@ -921,7 +941,7 @@ run_test() {
   done < <(score_domains raw_results)
 
   # Get best SNI
-  IFS='|' read -r best_score best_sni _ best_reachable _ <<< "${scored[0]}"
+  IFS='|' read -r best_score best_sni _ best_reachable _ _ <<< "${scored[0]}"
 
   # Output
   if [[ -n "$OUTPUT_FILE" ]]; then
