@@ -737,97 +737,116 @@ browse_by_country() {
     return 0
   fi
 
-  # Ask how many top domains to check
-  echo "Enter number of top domains to check (default: all, ${#rows[@]}):" >&2
-  read -r -p "> " num
-  num=$(echo "$num" | tr -cd '0-9')
-  if [[ -z "$num" || "$num" -le 0 || "$num" -gt ${#rows[@]} ]]; then
-    num=${#rows[@]}
-  fi
-
-  # Resolve IP + query country for each selected domain
-  local -a geo_rows=()   # "country|domain|row"
-  local i=0
-  for row in "${rows[@]:0:$num}"; do
-    local g_domain g_ip g_country
-    IFS='|' read -r _ g_domain _ <<< "$row"
-    i=$((i + 1))
-    printf '[%d/%d] %s ...' "$i" "$num" "$g_domain" >&2
-
-    resolve_host_ips "$g_domain"
-    g_ip=$(echo "$CF_IPV4_LIST" | awk '{print $1}')
-    if [[ -z "$g_ip" ]]; then
-      g_country="UNKNOWN"
-    else
-      g_country=$(geoip_country "$g_ip")
+  # Outer loop: ask count -> GeoIP query -> group by country
+  while true; do
+    # Ask how many top domains to check
+    echo "Enter number of top domains to check (default: all, ${#rows[@]}):" >&2
+    read -r -p "> " num
+    num=$(echo "$num" | tr -cd '0-9')
+    if [[ -z "$num" || "$num" -le 0 || "$num" -gt ${#rows[@]} ]]; then
+      num=${#rows[@]}
     fi
-    printf '\r[%d/%d] %-35s → %s\n' "$i" "$num" "$g_domain" "$g_country" >&2
-    geo_rows+=("$g_country|$g_domain|$row")
-  done
 
-  # Group by country, keep first-seen order
-  local -a country_codes=()
-  local -a country_domains=()  # "code|domain1|domain2..."
-  local g
-  for g in "${geo_rows[@]}"; do
-    local code d
-    code="${g%%|*}"
-    d="${g#*|}"
-    d="${d%%|*}"
-    local found=false idx=0
-    for ((j = 0; j < ${#country_codes[@]}; j++)); do
-      if [[ "${country_codes[j]}" == "$code" ]]; then
-        found=true
-        idx=$j
-        break
+    # Resolve IP + query country for each selected domain
+    local -a geo_rows=()   # "country|domain|row"
+    local i=0
+    for row in "${rows[@]:0:$num}"; do
+      local g_domain g_ip g_country
+      IFS='|' read -r _ g_domain _ <<< "$row"
+      i=$((i + 1))
+      printf '[%d/%d] %s ...' "$i" "$num" "$g_domain" >&2
+
+      resolve_host_ips "$g_domain"
+      g_ip=$(echo "$CF_IPV4_LIST" | awk '{print $1}')
+      if [[ -z "$g_ip" ]]; then
+        g_country="UNKNOWN"
+      else
+        g_country=$(geoip_country "$g_ip")
+      fi
+      printf '\r[%d/%d] %-35s → %s\n' "$i" "$num" "$g_domain" "$g_country" >&2
+      geo_rows+=("$g_country|$g_domain|$row")
+    done
+
+    # Group by country, keep first-seen order
+    local -a country_codes=()
+    local -a country_domains=()  # "code|domain1|domain2..."
+    local g
+    for g in "${geo_rows[@]}"; do
+      local code d
+      code="${g%%|*}"
+      d="${g#*|}"
+      d="${d%%|*}"
+      local found=false idx=0
+      for ((j = 0; j < ${#country_codes[@]}; j++)); do
+        if [[ "${country_codes[j]}" == "$code" ]]; then
+          found=true
+          idx=$j
+          break
+        fi
+      done
+      if $found; then
+        country_domains[idx]="${country_domains[idx]}|$d"
+      else
+        country_codes+=("$code")
+        country_domains+=("$code|$d")
       fi
     done
-    if $found; then
-      country_domains[idx]="${country_domains[idx]}|$d"
-    else
-      country_codes+=("$code")
-      country_domains+=("$code|$d")
-    fi
-  done
 
-  # Show country list (numbered from 0)
-  echo >&2
-  echo "==============================" >&2
-  echo "Country classification:" >&2
-  for ((j = 0; j < ${#country_codes[@]}; j++)); do
-    local cname cc cnt
-    cc="${country_codes[j]}"
-    cname="$(country_name "$cc")"
-    cnt=$(echo "${country_domains[j]}" | awk -F'|' '{print NF-1}')
-    echo "  $j) $cc ($cname) - $cnt domain(s)" >&2
-  done
-  echo "==============================" >&2
+    # Inner loop: show country list -> pick country -> show domains -> 0/1/2
+    while true; do
+      # Show country list (numbered from 0)
+      echo >&2
+      echo "==============================" >&2
+      echo "Country classification:" >&2
+      for ((j = 0; j < ${#country_codes[@]}; j++)); do
+        local cname cc cnt
+        cc="${country_codes[j]}"
+        cname="$(country_name "$cc")"
+        cnt=$(echo "${country_domains[j]}" | awk -F'|' '{print NF-1}')
+        echo "  $j) $cc ($cname) - $cnt domain(s)" >&2
+      done
+      echo "==============================" >&2
 
-  read -r -p "Enter country number: " pick
-  pick=$(echo "$pick" | tr -cd '0-9')
-  if [[ -z "$pick" || "$pick" -ge ${#country_codes[@]} ]]; then
-    echo "Invalid selection." >&2
-    return 0
-  fi
+      read -r -p "Enter country number: " pick
+      pick=$(echo "$pick" | tr -cd '0-9')
+      if [[ -z "$pick" || "$pick" -ge ${#country_codes[@]} ]]; then
+        echo "Invalid selection." >&2
+        continue
+      fi
 
-  # Show domains of selected country with their measured info
-  local sel_code="${country_codes[pick]}"
-  echo >&2
-  echo "Domains in $sel_code ($(country_name "$sel_code")):" >&2
-  local g
-  for g in "${geo_rows[@]}"; do
-    local code d row2
-    code="${g%%|*}"
-    rest="${g#*|}"
-    d="${rest%%|*}"
-    row2="${rest#*|}"
-    [[ "$code" != "$sel_code" ]] && continue
-    local s tls alpn kex tls_ms ping_ms kc
-    IFS='|' read -r s _ _ _ _ tls tls_ms ping_ms _ _ kc _ _ alpn kex <<< "$row2"
-    printf '  [score %-3s] %-30s %s %s %s %s %sms\n' "$s" "$d" "$tls" "$alpn" "$kex" "$kc" "$tls_ms" >&2
+      # Show domains of selected country with their measured info
+      local sel_code="${country_codes[pick]}"
+      echo >&2
+      echo "Domains in $sel_code ($(country_name "$sel_code")):" >&2
+      local g
+      for g in "${geo_rows[@]}"; do
+        local code d row2
+        code="${g%%|*}"
+        rest="${g#*|}"
+        d="${rest%%|*}"
+        row2="${rest#*|}"
+        [[ "$code" != "$sel_code" ]] && continue
+        local s tls alpn kex tls_ms ping_ms kc
+        IFS='|' read -r s _ _ _ _ tls tls_ms ping_ms _ _ kc _ _ alpn kex <<< "$row2"
+        printf '  [score %-3s] %-30s %s %s %s %s %sms\n' "$s" "$d" "$tls" "$alpn" "$kex" "$kc" "$tls_ms" >&2
+      done
+
+      # 0/1/2 selection after showing domains
+      echo >&2
+      echo "==============================" >&2
+      echo " 0) Return to main menu" >&2
+      echo " 1) Re-select country" >&2
+      echo " 2) Re-enter domain count and re-query" >&2
+      echo "==============================" >&2
+      read -r -p "Choose [0-2]: " sub
+      case "$sub" in
+        0) return 0 ;;
+        1) continue ;;   # back to country list (same query)
+        2) break ;;      # back to outer loop (re-ask count + re-query)
+        *) echo "Invalid choice." >&2 ;;
+      esac
+    done
   done
-  echo >&2
-  read -r -p "Press Enter to return to menu..." _ >&2
 }
 
 # --- Interactive menu ---
