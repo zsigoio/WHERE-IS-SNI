@@ -1,6 +1,4 @@
-# WHERE-IS-SNI
-
-[English](README/README_EN.md) | [中文](README/README_CN.md) | [فارسی](README/README_FA.md) | [Русский](README/README_RU.md)
+# WHERE-IS-SNI — English
 
 > A domain pool & scoring tool for finding optimal SNI domains for REALITY protocol.
 
