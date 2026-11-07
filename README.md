@@ -2,122 +2,40 @@
 
 [English](README/README_EN.md) | [中文](README/README_CN.md) | [فارسی](README/README_FA.md) | [Русский](README/README_RU.md)
 
-> A domain pool & scoring tool for finding optimal SNI domains for REALITY protocol.
+Find and audit public TLS targets for Xray REALITY. The candidate pool is in [domains.txt](domains.txt).
 
----
+## Run
 
-## Introduction
+The probe requires Go 1.25+ and a system CA store. The shell launchers also need Bash, and the download launcher needs curl. The Go probe uses only the standard library.
 
-`WHERE-IS-SNI` provides a curated pool of **693 candidate domains** and a Bash scoring script to help you find the optimal SNI for the Xray REALITY protocol.
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `domains.txt` | 693 candidate domains covering global regions and industries |
-| `sni-finder.sh` | Auto-test script: random pick, probe, score, JSON output |
-| `sni-finder-run.sh` | One-liner install & run script |
-| `.gitignore` | Ignore local config files |
-
-## Usage
-
-**One-liner (random 15):**
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
-```
-
-**Test specific domains:**
-```bash
-bash <(curl -sL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh) shopee.vn tiki.vn sendo.vn
-```
-
-Or clone locally:
-```bash
-# 1. Clone on your Linux server
-git clone https://github.com/zsigoio/WHERE-IS-SNI.git
-cd WHERE-IS-SNI
-
-# 2. Make it executable
-chmod +x sni-finder.sh
-
-# 3. Run directly (random 15 domains)
+# Random sample from the bundled pool
 bash sni-finder.sh
 
-# 4. Test specific domains
-bash sni-finder.sh www.samsung.com www.sony.com www.intel.com
+# Full audit with failure reasons
+bash sni-finder.sh --all --no-menu -j 24 -o audit.json
 
-# 5. Specify sample size
-bash sni-finder.sh -n 5
+# Explicit target and SNI, matching the values entered in the panel
+bash sni-finder.sh --no-menu --sni www.example.org 203.0.113.10:443
 
-# 6. Custom timeout (seconds)
-bash sni-finder.sh -t 3
-
-# 7. Custom domain list file
-bash sni-finder.sh -l my-domains.txt
-
-# 8. Output to file
-bash sni-finder.sh -o result.json
-
-# 9. Auto-apply best SNI, skip menu
-bash sni-finder.sh -y
-
-# 10. JSON only, no menu
-bash sni-finder.sh --no-menu
-
-# 11. Specify Xray config path
-bash sni-finder.sh -y --xray-config /etc/xray/config.json
-
-# 12. Verbose progress
-bash sni-finder.sh -v
-
-# 13. Combine options
-bash sni-finder.sh -n 8 -t 4 -o result.json -v
-
-# 14. Specific domains + auto-apply
-bash sni-finder.sh -y www.cloudflare.com www.fastly.com
+# Download and run the published version
+bash <(curl -fsSL https://raw.githubusercontent.com/zsigoio/WHERE-IS-SNI/main/sni-finder-run.sh)
 ```
 
-## Interactive Menu
+On Windows, run the probe directly from the repository root.
 
-After testing, four options appear:
-
-```
- 0) Exit
- 1) Re-test with new random domains
- 2) Apply 'best-sni' to Xray config and restart
- 3) Browse domains by country
+```powershell
+go run .\sni-finder.go --all --no-menu -o audit.json
 ```
 
-- **0** — Exit
-- **1** — Pick new random domains and re-test (or re-test same domains in specify mode)
-- **2** — Write best SNI to Xray config (auto-backup) and restart service
-- **3** — Browse tested results grouped by country (GeoIP via ip.im)
+Use `-h` to list options. Put options before targets. Bare hosts use port 443. If the target expects a PROXY header, pass the panel's `--xver 1` or `--xver 2`.
 
-## Scoring Breakdown
+The interactive menu can resample, apply the best eligible result, or group results by country using the tested IP. To apply without a menu, use `-y --xray-config PATH`. Apply updates REALITY inbounds using the exact target and SNI that passed the probe, checks their `xver`, backs up the config, and restarts an active Xray or V2Ray systemd service when present.
 
-| Metric | Weight | Description |
-|--------|--------|-------------|
-| TCP connectivity | 25% | Score 0 if unreachable |
-| Latency | 20% | ping + TLS handshake combined |
-| TLS version | 12% | 1.3 full (12), 1.2 only 3 |
-| ALPN h2 | 8% | h2 full (8), http/1.1 only 3 |
-| Key exchange | 10% | X25519MLKEM768 full (10), X25519 7 |
-| Cert chain size | 10% | Smaller = better |
-| Key type | 10% | ECDSA full (10), RSA 6 |
-| DNS resolution | 5% | Faster = better |
+## Eligibility and ranking
 
-> ⚠️ **Cloudflare domains score 0**: Domains whose DNS IPs (IPv4/IPv6) fall within Cloudflare CDN ranges ([official list](https://www.cloudflare.com/ips-v4)) are skipped entirely with score 0, to prevent fallback traffic from being hijacked by CF.
+The probe mirrors the TLS checks of the current 3x-ui scanner. One handshake must negotiate TLS 1.3, ALPN `h2`, and X25519 or X25519MLKEM768, with a certificate trusted for the supplied SNI. A server that negotiates TLS 1.3 can also offer TLS 1.2 to legacy clients. The pool also excludes names whose resolved addresses include a Cloudflare CDN IP or a non-public IP. [3x-ui scanner](https://github.com/MHSanaei/3x-ui/blob/main/internal/web/service/reality_scan.go) · [Cloudflare IP ranges](https://www.cloudflare.com/ips/)
 
-## Dependencies
+Every sampled target appears in JSON with `eligible`, `reasons`, the resolved addresses, and handshake details when available. `best_sni` and `best_target` are empty if all targets fail. `reachable` indicates a completed TLS handshake. `ping_ms` is retained as `-1` for compatibility. Eligible scores retain the original weights, using TCP plus TLS latency for the 20 latency points. `--max-latency` limits those points without changing eligibility.
 
-| Tool | Purpose | Pre-installed |
-|------|---------|---------------|
-| `openssl` | TLS handshake | ✅ Most Linux distros |
-| `ping` | ICMP latency | ✅ Default |
-| `getent` | DNS resolution | ✅ glibc |
-| `shuf` | Random selection | ✅ GNU coreutils |
-| `timeout` | Timeout control | ✅ GNU coreutils |
-
-## Domain Pool Coverage
-
-> See `domains.txt` for full list.
+DNS answers, address ordering, routing, egress filtering, and trusted CAs can differ between a workstation and the VPS. Compare the same target, SNI, and xver from the machine or container running 3x-ui. Use the audit's resolved and connected IPs to explain discrepancies.
