@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-const version = "1.1.0"
+const version = "1.1.1"
 
 const cloudflareRanges = `
 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22
@@ -556,6 +556,7 @@ func countEligible(rows []result) int {
 func menu(input *bufio.Scanner, rows []result, path string, xver int) (bool, error) {
 	for {
 		fmt.Fprintln(os.Stderr, "0) Exit\n1) Re-test\n2) Apply best eligible target and restart\n3) Browse eligible targets by country")
+		fmt.Fprint(os.Stderr, "Choose [0-3]: ")
 		if !input.Scan() {
 			return false, input.Err()
 		}
@@ -584,6 +585,7 @@ func browseCountries(input *bufio.Scanner, rows []result) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "Number of top targets to look up (default: %d)\n", eligible)
+	fmt.Fprint(os.Stderr, "Press Enter for the default or enter a number: ")
 	if !input.Scan() {
 		return
 	}

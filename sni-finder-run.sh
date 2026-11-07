@@ -20,4 +20,11 @@ for file in sni-finder.go domains.txt sni-finder.sh; do
   mv -- "$DOWNLOAD_DIR/$file" "$TARGET_DIR/$file"
 done
 
-bash "$TARGET_DIR/sni-finder.sh" "$@"
+rmdir -- "$DOWNLOAD_DIR"
+trap - EXIT
+
+# In curl | bash, stdin carries the launcher. Give the menu the terminal.
+if [[ ! -t 0 && -t 2 ]] && { exec 3</dev/tty; } 2>/dev/null; then
+  exec bash "$TARGET_DIR/sni-finder.sh" "$@" <&3 3<&-
+fi
+exec bash "$TARGET_DIR/sni-finder.sh" "$@"

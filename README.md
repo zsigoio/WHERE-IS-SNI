@@ -4,37 +4,9 @@
 
 Find and audit public TLS targets for Xray REALITY. The candidate pool is in [domains.txt](domains.txt).
 
-## Install Go on Linux
+## Go on Linux
 
-Run `go version` on the server first. If Go is missing or older than 1.25, use Bash to download the official release for x86-64 or ARM64 and install it under your user account. [Go installation guide](https://go.dev/doc/install) · [Official downloads](https://go.dev/dl/)
-
-```bash
-(
-  set -eu
-  case "$(uname -m)" in
-    x86_64) go_arch=amd64 ;;
-    aarch64|arm64) go_arch=arm64 ;;
-    *) echo "See https://go.dev/dl/ for this architecture." >&2; exit 1 ;;
-  esac
-
-  go_release=$(curl -fsSL 'https://go.dev/VERSION?m=text')
-  go_version=${go_release%%$'\n'*}
-  [[ $go_version =~ ^go[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
-  go_dir="$HOME/.local/opt/sni-go"
-  mkdir -p "$go_dir"
-
-  if [ ! -x "$go_dir/$go_version/bin/go" ]; then
-    work_dir=$(mktemp -d "$go_dir/.install.XXXXXX")
-    trap 'rm -f "$work_dir/go.tar.gz"; rmdir "$work_dir" 2>/dev/null || true' EXIT
-    curl -fsSL "https://go.dev/dl/$go_version.linux-$go_arch.tar.gz" -o "$work_dir/go.tar.gz"
-    tar -xzf "$work_dir/go.tar.gz" -C "$work_dir"
-    mv -T "$work_dir/go" "$go_dir/$go_version"
-  fi
-  ln -sfnT "$go_version" "$go_dir/current"
-) && export PATH="$HOME/.local/opt/sni-go/current/bin:$PATH" && go version
-```
-
-To keep Go on your PATH in new SSH sessions, add `export PATH="$HOME/.local/opt/sni-go/current/bin:$PATH"` to `~/.profile`. Run the commands below as the same user.
+The Bash launcher checks for Go 1.25 or newer. If needed, it downloads the official Go archive for Linux x86-64 or ARM64, verifies its SHA-256 checksum, and caches it under `${XDG_CACHE_HOME:-$HOME/.cache}/sni-finder`. You can also install Go manually. [Official Go downloads](https://go.dev/dl/)
 
 ## Run
 
@@ -62,7 +34,7 @@ go run .\sni-finder.go --all --no-menu -o audit.json
 
 Use `-h` to list options. Put options before targets. Bare hosts use port 443. If the target expects a PROXY header, pass the panel's `--xver 1` or `--xver 2`.
 
-The interactive menu can resample, apply the best eligible result, or group results by country using the tested IP. To apply without a menu, use `-y --xray-config PATH`. Apply updates REALITY inbounds using the exact target and SNI that passed the probe, checks their `xver`, backs up the config, and restarts an active Xray or V2Ray systemd service when present.
+At the terminal prompt, type a number from 0 to 3 and press Enter. Use `--no-menu` for batch runs. The interactive menu can resample, apply the best eligible result, or group results by country using the tested IP. To apply without a menu, use `-y --xray-config PATH`. Apply updates REALITY inbounds using the exact target and SNI that passed the probe, checks their `xver`, backs up the config, and restarts an active Xray or V2Ray systemd service when present.
 
 ## Eligibility and ranking
 
