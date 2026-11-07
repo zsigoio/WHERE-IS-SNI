@@ -4,6 +4,38 @@
 
 从 [域名池](../domains.txt) 抽样或全量筛查 Xray REALITY 的公网目标。需要 Go 1.25+ 和系统 CA 证书库。通过脚本运行还需要 Bash，一键下载需要 curl。
 
+## 在 Linux 服务器上安装 Go
+
+先在服务器上运行 `go version`。如果提示找不到命令，或者版本低于 1.25，在 Bash 中运行下面的命令。它会识别 x86-64 或 ARM64，下载 Go 官方发行包并安装到当前用户目录，无需 sudo。 [Go 官方安装说明](https://go.dev/doc/install) · [官方下载页](https://go.dev/dl/)
+
+```bash
+(
+  set -eu
+  case "$(uname -m)" in
+    x86_64) go_arch=amd64 ;;
+    aarch64|arm64) go_arch=arm64 ;;
+    *) echo "See https://go.dev/dl/ for this architecture." >&2; exit 1 ;;
+  esac
+
+  go_release=$(curl -fsSL 'https://go.dev/VERSION?m=text')
+  go_version=${go_release%%$'\n'*}
+  [[ $go_version =~ ^go[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
+  go_dir="$HOME/.local/opt/sni-go"
+  mkdir -p "$go_dir"
+
+  if [ ! -x "$go_dir/$go_version/bin/go" ]; then
+    work_dir=$(mktemp -d "$go_dir/.install.XXXXXX")
+    trap 'rm -f "$work_dir/go.tar.gz"; rmdir "$work_dir" 2>/dev/null || true' EXIT
+    curl -fsSL "https://go.dev/dl/$go_version.linux-$go_arch.tar.gz" -o "$work_dir/go.tar.gz"
+    tar -xzf "$work_dir/go.tar.gz" -C "$work_dir"
+    mv -T "$work_dir/go" "$go_dir/$go_version"
+  fi
+  ln -sfnT "$go_version" "$go_dir/current"
+) && export PATH="$HOME/.local/opt/sni-go/current/bin:$PATH" && go version
+```
+
+如果希望重新 SSH 登录后也能使用 Go，把 `export PATH="$HOME/.local/opt/sni-go/current/bin:$PATH"` 加到 `~/.profile`。请用同一个用户运行下面的 SNI 脚本。
+
 ## 使用
 
 ```bash
